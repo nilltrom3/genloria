@@ -105,8 +105,8 @@ function viewLogin() {
       <p class="sub">Generaciones unidas · Historias que perduran</p>
       <div class="card">
         <form id="f-login">
-          <label>Correo electrónico</label>
-          <input type="email" name="email" autocomplete="username" required placeholder="tucorreo@ejemplo.com">
+          <label>Correo electrónico o usuario</label>
+          <input type="text" name="email" autocomplete="username" required placeholder="tucorreo@ejemplo.com o admin">
           <label>Contraseña</label>
           <input type="password" name="password" autocomplete="current-password" required>
           <div class="error hidden" id="err"></div>
