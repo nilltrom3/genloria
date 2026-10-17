@@ -1,5 +1,5 @@
-// service-worker.js — PWA: app shell offline, API siempre a la red.
-const CACHE = 'genloria-v7';
+// service-worker.js — PWA: app shell con red primero (actualizaciones inmediatas), imágenes en caché.
+const CACHE = 'genloria-v8';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/tree.js', '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/avatar-default.svg',
@@ -31,12 +31,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // App shell: caché primero, red como respaldo
+  // Imágenes e iconos: caché primero (cambian poco)
+  if (url.pathname.startsWith('/icons/') || url.pathname.startsWith('/images/')) {
+    event.respondWith(
+      caches.match(request).then((hit) => hit || fetch(request).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(request, copy));
+        return res;
+      }).catch(() => caches.match(request)))
+    );
+    return;
+  }
+
+  // App shell (HTML/JS/CSS): RED PRIMERO — siempre lo más nuevo cuando hay internet,
+  // caché solo como respaldo sin conexión. Así las actualizaciones se ven al instante.
   event.respondWith(
-    caches.match(request).then((hit) => hit || fetch(request).then((res) => {
+    fetch(request).then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(request, copy));
       return res;
-    }).catch(() => caches.match('/index.html')))
+    }).catch(() => caches.match(request).then((hit) => hit || caches.match('/index.html')))
   );
 });

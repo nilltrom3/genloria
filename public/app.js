@@ -1,7 +1,7 @@
 // app.js — SPA de GENLORIA (vanilla JS)
 'use strict';
 
-const APP_VERSION = '7';
+const APP_VERSION = '8';
 const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const app = $('#app');
