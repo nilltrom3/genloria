@@ -109,7 +109,7 @@ for (const col of [
   'birth_place', 'baptism_date', 'baptism_place',
   'death_date', 'death_place', 'death_cause', 'burial_place',
   'occupation', 'education', 'religion', 'nationality', 'residence',
-  'military_service', 'notes'
+  'military_service', 'notes', 'color'
 ]) {
   const exists = db.prepare('PRAGMA table_info(users)').all().some(c => c.name === col);
   if (!exists) db.prepare(`ALTER TABLE users ADD COLUMN ${col} TEXT DEFAULT ''`).run();
@@ -170,6 +170,25 @@ db.exec(`CREATE TABLE IF NOT EXISTS messages (
 )`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_participants_user ON conversation_participants(user_id)');
 db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id)');
+
+// Asignar colores variados a miembros existentes que no tengan uno
+try {
+  const palette = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee',
+    '#60a5fa', '#a78bfa', '#f472b6', '#2dd4bf', '#e879f9', '#94a3b8', '#fdba74'];
+  const noColor = db.prepare("SELECT id FROM users WHERE color IS NULL OR color = ''").all();
+  if (noColor.length) {
+    const used = {};
+    for (const r of db.prepare("SELECT color, COUNT(*) c FROM users WHERE color IS NOT NULL AND color != '' GROUP BY color").all())
+      used[r.color] = r.c;
+    for (const u of noColor) {
+      let best = palette[0], bestN = Infinity;
+      for (const c of palette) { const n = used[c] || 0; if (n < bestN) { best = c; bestN = n; } }
+      db.prepare('UPDATE users SET color = ? WHERE id = ?').run(best, u.id);
+      used[best] = (used[best] || 0) + 1;
+    }
+    console.log(`[db] Colores asignados a ${noColor.length} miembros.`);
+  }
+} catch (e) { console.error('[db] Error asignando colores:', e.message); }
 
 // Limpieza periódica de historias vencidas (cada 15 minutos)
 setInterval(() => {

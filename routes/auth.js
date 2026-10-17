@@ -18,10 +18,10 @@ const authLimiter = rateLimit({
 const PERSON_FIELDS = ['nickname', 'maiden_name', 'sex', 'birth_place',
   'baptism_date', 'baptism_place', 'death_date', 'death_place', 'death_cause', 'burial_place',
   'occupation', 'education', 'religion', 'nationality', 'residence',
-  'military_service', 'notes'];
+  'military_service', 'notes', 'color'];
 
 function publicUser(u) {
-  const p = { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null, is_deceased: !!u.is_deceased, is_placeholder: !!u.is_placeholder };
+  const p = { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null, is_deceased: !!u.is_deceased, is_placeholder: !!u.is_placeholder, color: u.color || null };
   for (const f of PERSON_FIELDS) p[f] = u[f] || null;
   return p;
 }
@@ -49,6 +49,8 @@ function cleanPersonFields(body) {
   out.residence = str(body.residence, 120);
   out.military_service = str(body.military_service, 200);
   out.notes = str(body.notes, 2000);
+  const col = (body.color || '').toString().trim();
+  out.color = /^#[0-9a-fA-F]{6}$/.test(col) ? col : null;
   return out;
 }
 
@@ -112,10 +114,26 @@ router.post('/register', authLimiter, (req, res) => {
   const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(emailNorm);
   if (exists) return res.status(409).json({ error: 'Ese correo ya está registrado.' });
 
+// Paleta de colores para familiares (los preferidos se asignan manualmente)
+const USER_COLOR_PALETTE = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee',
+  '#60a5fa', '#a78bfa', '#f472b6', '#2dd4bf', '#e879f9', '#94a3b8', '#fdba74'];
+// Elige el color menos usado para que los miembros se vean diferentes
+function pickLeastUsedColor() {
+  const rows = db.prepare('SELECT color, COUNT(*) c FROM users WHERE color IS NOT NULL AND color != ? GROUP BY color').all('');
+  const used = {};
+  for (const r of rows) used[r.color] = r.c;
+  let best = USER_COLOR_PALETTE[0], bestCount = Infinity;
+  for (const c of USER_COLOR_PALETTE) {
+    const n = used[c] || 0;
+    if (n < bestCount) { best = c; bestCount = n; }
+  }
+  return best;
+}
+
   const username = deriveUsername(db, emailNorm, name.trim());
   const hash = bcrypt.hashSync(password, 12);
-  const info = db.prepare('INSERT INTO users (username, name, email, password_hash) VALUES (?,?,?,?)')
-    .run(username, name.trim(), emailNorm, hash);
+  const info = db.prepare('INSERT INTO users (username, name, email, password_hash, color) VALUES (?,?,?,?,?)')
+    .run(username, name.trim(), emailNorm, hash, pickLeastUsedColor());
   db.prepare('UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?').run(code.id);
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);

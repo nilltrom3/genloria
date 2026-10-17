@@ -25,9 +25,14 @@ function userColor(id) {
   const n = parseInt(id, 10) || 0;
   return USER_COLORS[n % USER_COLORS.length];
 }
+function userColorFor(user) {
+  // Color preferido guardado, o automático por ID
+  if (user && user.color && /^#[0-9a-fA-F]{6}$/.test(user.color)) return user.color;
+  return userColor(user ? user.id : 0);
+}
 function coloredName(user) {
   if (!user) return '';
-  return `<b style="color:${userColor(user.id)}">${esc(user.name)}</b>`;
+  return `<b style="color:${userColorFor(user)}">${esc(user.name)}</b>`;
 }
 function fmtDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
