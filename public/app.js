@@ -1576,12 +1576,20 @@ async function viewFamily() {
   };
   app.innerHTML = `
     ${topbar('Familia')}
-    ${me && me.role === 'admin' ? `<div style="padding:12px 12px 0"><button class="btn" data-go="#/admin/codes" style="width:100%">✉️ Invitar a un familiar</button></div>` : ''}
+    <div style="padding:12px 12px 0"><button class="btn" id="btn-invite" style="width:100%">✉️ Invitar a un familiar</button></div>
     <div style="padding:12px 12px 0"><input type="search" id="fam-q" placeholder="🔍 Buscar familiar…" style="margin:0"></div>
     <div class="card" style="padding:0;overflow:hidden" id="fam-list">
       ${users.map(row).join('')}
     </div>
     <p style="text-align:center;color:var(--muted);font-size:.85rem">${users.length} persona(s) en la familia</p>`;
+  $('#btn-invite').onclick = async () => {
+    try {
+      const { family } = await api('/api/auth/my-family');
+      const text = `Únete a mi familia "${family.name}" en GENLORIA con el código: ${family.invite_code} — https://genloria.com/#/register`;
+      if (navigator.share) { try { await navigator.share({ text }); } catch {} }
+      else { try { await navigator.clipboard.writeText(text); toast('Invitación copiada 📋'); } catch {} }
+    } catch (err) { toast(err.message); }
+  };
   const q = $('#fam-q'), list = $('#fam-list');
   $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
   q.addEventListener('input', () => {
