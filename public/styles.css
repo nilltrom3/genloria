@@ -334,6 +334,70 @@ input[type=file] { display: none; }
 .about-feat small { color: var(--muted); font-size: .82rem; line-height: 1.45; }
 .about-cta { padding: 20px 16px 30px; max-width: 640px; margin: 0 auto; }
 
+/* Página "Conoce GENLORIA" (landing pública) */
+.conoce { background: var(--bg); color: var(--text); padding-bottom: 40px; }
+.conoce-hero {
+  position: relative; text-align: center; padding: 48px 20px 40px; overflow: hidden;
+  background: linear-gradient(160deg, #0b2b4f 0%, #123a66 55%, #0a1f3d 100%);
+}
+.conoce-hero::before {
+  content: ''; position: absolute; inset: 0; opacity: .35;
+  background: url('/images/login-hero.jpg') center/cover;
+}
+.conoce-hero > * { position: relative; }
+.conoce-hero img.logo { width: 110px; height: 110px; border-radius: 26px; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.conoce-hero h1 { margin: 16px 0 4px; font-size: 2.4rem; letter-spacing: .08em; color: #fff; }
+.conoce-hero .slogan { color: var(--gold); font-size: 1.15rem; font-weight: 700; margin: 0 0 20px; }
+.conoce-cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.conoce-cta .btn { width: auto; padding: 14px 26px; }
+.conoce-cta .btn-ghost {
+  padding: 14px 26px; border-radius: 14px; border: 1.5px solid rgba(255,255,255,.5);
+  color: #fff; background: transparent; font-weight: 700; font-size: 1rem; cursor: pointer;
+}
+.conoce-sec { max-width: 680px; margin: 0 auto; padding: 30px 20px 0; }
+.conoce-sec h2 { font-size: 1.45rem; margin: 0 0 12px; color: var(--text); }
+.conoce-sec h2 .em { color: var(--gold); }
+.conoce-sec p { color: var(--muted); line-height: 1.7; margin: 0 0 14px; font-size: 1rem; }
+.conoce-sec p b, .conoce-sec p strong { color: var(--text); }
+.conoce-feats { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+@media (min-width: 560px) { .conoce-feats { grid-template-columns: 1fr 1fr; } }
+.conoce-feat { display: flex; gap: 10px; align-items: flex-start; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 13px 14px; }
+.conoce-feat .fi { font-size: 1.4rem; }
+.conoce-feat small { color: var(--muted); line-height: 1.55; font-size: .92rem; }
+.letter-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.letter-card { display: flex; gap: 14px; align-items: flex-start; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+.letter-card .L {
+  flex: 0 0 52px; width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.7rem; font-weight: 800; color: #fff;
+}
+.letter-card .L.blue { background: linear-gradient(135deg, #2b7cd3, #1a5aa8); }
+.letter-card .L.green { background: linear-gradient(135deg, #43a047, #2e7d32); }
+.letter-card b { display: block; font-size: 1.1rem; margin-bottom: 3px; color: var(--text); }
+.letter-card small { color: var(--muted); line-height: 1.6; font-size: .93rem; }
+.conoce-split { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
+@media (min-width: 560px) { .conoce-split { grid-template-columns: 1fr 1fr; } }
+.conoce-split .box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+.conoce-split .box .tag { font-size: 1.6rem; font-weight: 800; color: var(--gold); letter-spacing: .06em; }
+.conoce-split .box b { display: block; margin: 6px 0 4px; color: var(--text); }
+.conoce-split .box small { color: var(--muted); line-height: 1.6; font-size: .92rem; }
+.conoce-values { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+@media (min-width: 560px) { .conoce-values { grid-template-columns: 1fr 1fr 1fr; } }
+.conoce-value { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+.conoce-value b { display: block; color: var(--gold); margin-bottom: 4px; font-size: .95rem; }
+.conoce-value small { color: var(--muted); line-height: 1.55; font-size: .88rem; }
+.conoce-quote {
+  margin: 26px 20px 0; padding: 26px 22px; text-align: center;
+  background: linear-gradient(150deg, rgba(212,175,55,.14), rgba(43,124,211,.1));
+  border: 1px solid rgba(212,175,55,.4); border-radius: 20px;
+}
+.conoce-quote p { color: var(--text); font-size: 1.05rem; line-height: 1.7; margin: 0 0 10px; font-style: italic; }
+.conoce-quote .sig { color: var(--gold); font-weight: 800; font-style: normal; }
+.conoce-foot { text-align: center; padding: 30px 20px 0; color: var(--muted); font-size: .85rem; }
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
 /* Hoja inferior (sheet) */
 #sheet { position: fixed; inset: 0; z-index: 55; background: rgba(0,0,0,.45);
   display: flex; align-items: flex-end; justify-content: center; }

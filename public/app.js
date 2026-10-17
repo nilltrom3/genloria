@@ -1,7 +1,7 @@
 // app.js — SPA de GENLORIA (vanilla JS)
 'use strict';
 
-const APP_VERSION = '9';
+const APP_VERSION = '10';
 const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const app = $('#app');
@@ -194,6 +194,7 @@ function viewLogin() {
       <div><div class="tb-icon">👥</div>${T('badge2')}</div>
       <div><div class="tb-icon">🌿</div>${T('badge3')}</div>
     </div>
+    <p style="text-align:center;margin-top:16px"><a href="#/conoce" style="color:var(--primary);font-weight:700;text-decoration:none">🌳 Conoce GENLORIA</a></p>
     <p class="login-version">GENLORIA v${APP_VERSION}</p>
   </div>`;
   $('#lang-btn').onclick = () => {
@@ -1488,6 +1489,129 @@ function viewAbout() {
     </div>`;
 }
 
+// ---------- Conoce GENLORIA (página pública) ----------
+function viewConoce() {
+  setNav(null);
+  document.title = 'Conoce GENLORIA — Generaciones conectadas. Historias que perduran.';
+  const letters = [
+    ['G', 'Generaciones', 'Representa la conexión entre abuelos, padres, hijos, nietos y todas las generaciones que forman una familia. GENLORIA busca mantener vivos esos vínculos y permitir que cada generación conozca a las anteriores.', 'blue'],
+    ['E', 'Encuentro', 'Simboliza el lugar donde las familias vuelven a encontrarse. No importa si sus integrantes viven en diferentes ciudades, países o continentes. GENLORIA ofrece un espacio digital donde pueden compartir sus vidas y mantenerse cerca.', 'blue'],
+    ['N', 'Nexo', 'Representa la conexión que une a las personas mediante la tecnología. Cada familiar forma parte de una red de relaciones, recuerdos e historias que construyen una identidad común.', 'blue'],
+    ['L', 'Legado', 'Simboliza todo aquello que una generación transmite a la siguiente. Fotografías, historias, enseñanzas, tradiciones, documentos y recuerdos que merecen conservarse. GENLORIA busca que ese legado permanezca accesible para quienes vendrán después.', 'green'],
+    ['O', 'Origen', 'Representa nuestras raíces y la búsqueda de nuestra historia. Conocer de dónde venimos nos ayuda a comprender quiénes somos. A través del árbol genealógico, cada familia puede reconstruir su pasado y descubrir las conexiones entre sus antepasados.', 'green'],
+    ['R', 'Raíces', 'Simboliza los vínculos familiares que nos sostienen y nos conectan. Así como las raíces de un árbol alimentan sus ramas, las generaciones anteriores forman la base de nuestra historia.', 'green'],
+    ['I', 'Identidad', 'Representa aquello que hace única a cada familia. Sus apellidos, costumbres, tradiciones, experiencias, valores y recuerdos compartidos. Cada familia posee una identidad propia que merece ser respetada y conservada.', 'green'],
+    ['A', 'Árbol', 'Representa el árbol genealógico, símbolo central de GENLORIA. Cada persona es parte de una estructura familiar que crece y se transforma con el paso de los años. Sus raíces representan el pasado, su tronco el presente y sus ramas las generaciones futuras.', 'green'],
+  ];
+  app.innerHTML = `
+  <div class="conoce">
+    <div class="conoce-hero">
+      <img class="logo" src="/logo-genloria.png" alt="Logo oficial de GENLORIA">
+      <h1>GENLORIA</h1>
+      <p class="slogan">Generaciones conectadas. Historias que perduran.</p>
+      <div class="conoce-cta">
+        <button class="btn" data-go="#/register">Crear mi familia</button>
+        <button class="btn-ghost" data-go="#/login">Iniciar sesión</button>
+      </div>
+    </div>
+
+    <div class="conoce-sec reveal">
+      <h2>Bienvenidos a <span class="em">GENLORIA</span></h2>
+      <p>Cada familia tiene una historia. Una historia que comienza mucho antes de nosotros y continúa escribiéndose con cada nueva generación.</p>
+      <p>Nuestros abuelos guardan recuerdos, nuestros padres transmiten enseñanzas y nuestros hijos representan el futuro de un legado que merece permanecer vivo.</p>
+      <p>Pero con el paso del tiempo, las familias crecen, se dispersan por diferentes ciudades y países, y muchos de esos momentos especiales quedan olvidados entre fotografías, conversaciones y recuerdos.</p>
+      <p><b>GENLORIA nace con una misión:</b> mantener unidas a las familias, sin importar la distancia, y conservar sus historias para las generaciones futuras.</p>
+      <p>Más que una red social, GENLORIA es un hogar digital privado donde cada familia puede compartir su presente, descubrir su pasado y construir su legado.</p>
+    </div>
+
+    <div class="conoce-sec reveal">
+      <h2>¿Qué es <span class="em">GENLORIA</span>?</h2>
+      <p>GENLORIA es una plataforma social familiar privada que combina las funciones de una red social moderna con un árbol genealógico interactivo.</p>
+      <p>Cada familia dispone de su propio espacio digital, donde sus miembros autorizados pueden:</p>
+      <div class="conoce-feats">
+        <div class="conoce-feat"><span class="fi">📸</span><small>Compartir fotografías, videos e historias familiares.</small></div>
+        <div class="conoce-feat"><span class="fi">💬</span><small>Comentar y reaccionar a las publicaciones.</small></div>
+        <div class="conoce-feat"><span class="fi">🌳</span><small>Construir y explorar su árbol genealógico.</small></div>
+        <div class="conoce-feat"><span class="fi">🧬</span><small>Descubrir relaciones de parentesco entre generaciones.</small></div>
+        <div class="conoce-feat"><span class="fi">📖</span><small>Crear perfiles y biografías de familiares.</small></div>
+        <div class="conoce-feat"><span class="fi">🕯️</span><small>Preservar recuerdos de antepasados y seres queridos.</small></div>
+        <div class="conoce-feat"><span class="fi">✉️</span><small>Invitar a otros familiares a su espacio privado.</small></div>
+        <div class="conoce-feat"><span class="fi">🔒</span><small>Cada familia controla quién accede a su contenido.</small></div>
+      </div>
+      <p style="margin-top:14px"><b>Tu familia. Tu espacio. Tu historia.</b></p>
+    </div>
+
+    <div class="conoce-sec reveal">
+      <h2>¿Qué significa <span class="em">GENLORIA</span>?</h2>
+      <p>GENLORIA es un nombre original de marca creado para representar la unión entre generaciones, la memoria familiar y la tecnología. Cada una de sus ocho letras representa un valor fundamental de nuestra filosofía.</p>
+      <div class="letter-cards">
+        ${letters.map(([L, t, d, c]) => `<div class="letter-card"><span class="L ${c}">${L}</span><div><b>${t}</b><small>${d}</small></div></div>`).join('')}
+      </div>
+    </div>
+
+    <div class="conoce-sec reveal">
+      <h2><span class="em">GEN</span> + <span class="em">LORIA</span>: el significado de nuestro nombre</h2>
+      <div class="conoce-split">
+        <div class="box"><span class="tag">GEN</span><b>Generaciones y genealogía</b><small>Representa a las personas, los vínculos familiares y la conexión entre generaciones.</small></div>
+        <div class="box"><span class="tag">LORIA</span><b>Legado, Origen, Raíces, Identidad y Árbol</b><small>Representa la historia familiar, su memoria y la continuidad de su legado.</small></div>
+      </div>
+      <p style="margin-top:14px">Juntas, estas ideas forman GENLORIA: una identidad que une familia, historia y tecnología.</p>
+    </div>
+
+    <div class="conoce-sec reveal">
+      <h2>Nuestro símbolo: <span class="em">el árbol de las generaciones</span></h2>
+      <p>El logo de GENLORIA representa visualmente nuestra misión.</p>
+      <div class="conoce-feats">
+        <div class="conoce-feat"><span class="fi">🌳</span><small><b>El árbol dorado:</b> simboliza el legado familiar, la fortaleza de nuestras raíces y la continuidad entre generaciones.</small></div>
+        <div class="conoce-feat"><span class="fi">👥</span><small><b>Los perfiles humanos:</b> representan a cada integrante de la familia, desde los antepasados hasta los nuevos descendientes.</small></div>
+        <div class="conoce-feat"><span class="fi">🍃</span><small><b>Las hojas verdes:</b> simbolizan la vida, el crecimiento, la esperanza y las nuevas generaciones.</small></div>
+        <div class="conoce-feat"><span class="fi">💠</span><small><b>Las conexiones azules luminosas:</b> representan la tecnología, la comunicación y los vínculos que unen a los familiares en una red digital.</small></div>
+      </div>
+      <p style="margin-top:14px">Cada elemento del logo transmite un mismo mensaje: <b>la tecnología conecta a las personas, pero la familia es lo que les da raíces.</b></p>
+    </div>
+
+    <div class="conoce-sec reveal">
+      <h2>Nuestra <span class="em">misión</span> y <span class="em">visión</span></h2>
+      <p><b>Misión:</b> conectar familias a través de una plataforma privada, accesible e intuitiva, que permita compartir experiencias, fortalecer los vínculos entre generaciones y preservar la memoria familiar mediante la tecnología.</p>
+      <p><b>Visión:</b> convertir GENLORIA en un espacio digital de referencia para las familias de todo el mundo, donde cada generación pueda conocer su historia, compartir su presente y dejar un legado para el futuro.</p>
+      <h2 style="margin-top:20px">Nuestros <span class="em">valores</span></h2>
+      <div class="conoce-values">
+        <div class="conoce-value"><b>Familia</b><small>Creemos en la importancia de mantener vivos los vínculos entre generaciones.</small></div>
+        <div class="conoce-value"><b>Privacidad</b><small>Cada familia debe controlar quién accede a sus recuerdos y conversaciones.</small></div>
+        <div class="conoce-value"><b>Identidad</b><small>Cada familia posee una historia única.</small></div>
+        <div class="conoce-value"><b>Memoria</b><small>Valoramos la conservación de fotografías, historias y testimonios.</small></div>
+        <div class="conoce-value"><b>Conexión</b><small>Utilizamos la tecnología para acercar a las personas.</small></div>
+        <div class="conoce-value"><b>Legado</b><small>Trabajamos para que las historias familiares se transmitan de generación en generación.</small></div>
+      </div>
+    </div>
+
+    <div class="conoce-sec reveal">
+      <h2>Una red social <span class="em">diferente</span></h2>
+      <p>Las redes sociales tradicionales están diseñadas para conectar personas con el mundo. GENLORIA tiene un propósito diferente: <b>conectar a las personas con quienes forman parte de su historia.</b></p>
+      <p>Aquí, lo importante no es conseguir seguidores ni hacer publicaciones virales. Lo importante es compartir un cumpleaños, recordar a un abuelo, conocer a un primo lejano, descubrir una fotografía antigua o escuchar una historia que nunca antes habíamos conocido.</p>
+      <p>GENLORIA está pensada para que esos pequeños momentos familiares tengan un lugar especial.</p>
+    </div>
+
+    <div class="conoce-quote reveal">
+      <p>"Imagina que dentro de cincuenta años uno de tus descendientes pueda explorar su árbol genealógico, conocer los nombres de sus antepasados, descubrir fotografías familiares y leer historias de personas que nunca llegó a conocer. Ese es el legado que GENLORIA aspira a ayudar a construir."</p>
+      <p class="sig">GENLORIA — Generaciones conectadas. Historias que perduran.<br>Una creación de Nilltrom.</p>
+    </div>
+
+    <div class="conoce-sec" style="text-align:center">
+      <div class="conoce-cta">
+        <button class="btn" data-go="#/register">Crear mi familia</button>
+        <button class="btn-ghost" data-go="#/login" style="border-color:var(--border);color:var(--text)">← Volver</button>
+      </div>
+    </div>
+    <p class="conoce-foot">© 2026 GENLORIA · Generaciones conectadas. Historias que perduran.</p>
+  </div>`;
+  // Animación suave al desplazar
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }), { threshold: 0.08 });
+  $$('.conoce .reveal').forEach(el => io.observe(el));
+}
+
 async function boot() {
   try {
     const { user } = await api('/api/auth/me');
@@ -1496,9 +1620,10 @@ async function boot() {
 
   async function route() {
     const h = location.hash || '#/feed';
-    if (!me && h !== '#/login' && h !== '#/register' && h !== '#/recover') { location.hash = '#/login'; return; }
+    if (!me && h !== '#/login' && h !== '#/register' && h !== '#/recover' && h !== '#/conoce') { location.hash = '#/login'; return; }
     if (me && (h === '#/login' || h === '#/register' || h === '#/recover')) { location.hash = '#/feed'; return; }
     if (h === '#/login') return viewLogin();
+    if (h === '#/conoce') return viewConoce();
     if (h === '#/register') return viewRegister();
     if (h === '#/recover') return viewRecover();
     if (h === '#/feed') return viewFeed();
