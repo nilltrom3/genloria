@@ -149,6 +149,28 @@ db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
 )`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_resets_user ON password_resets(user_id)');
 
+// Chat interno tipo Messenger (conversaciones 1-a-1 y mensajes).
+db.exec(`CREATE TABLE IF NOT EXISTS conversations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE TABLE IF NOT EXISTS conversation_participants (
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  last_read_at TEXT NOT NULL DEFAULT (datetime('now', '-1 day')),
+  PRIMARY KEY (conversation_id, user_id)
+)`);
+db.exec(`CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_participants_user ON conversation_participants(user_id)');
+db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id)');
+
 // Limpieza periódica de historias vencidas (cada 15 minutos)
 setInterval(() => {
   try {

@@ -59,6 +59,7 @@ app.use('/api/stories', require('./routes/stories'));
 app.use('/api/tree', require('./routes/tree'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/chat', require('./routes/chat'));
 
 // Manejo de errores de subida
 // eslint-disable-next-line no-unused-vars

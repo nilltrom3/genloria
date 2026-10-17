@@ -136,10 +136,25 @@ function setNav(active) {
       (active === 'tree' && target === '#/tree') ||
       (active === 'new' && target === '#/new') ||
       (active === 'family' && target === '#/family') ||
+      (active === 'chat' && target === '#/chat') ||
       (active === 'profile' && target === '#/profile')
     ));
   });
+  if (me) updateChatBadge();
 }
+
+// Insignia de mensajes no leídos en la navegación
+async function updateChatBadge() {
+  try {
+    const { unread } = await api('/api/chat/unread');
+    const badge = $('#chat-badge');
+    if (!badge) return;
+    badge.classList.toggle('hidden', !unread);
+    badge.textContent = unread > 99 ? '99+' : unread;
+  } catch (e) { /* silencioso */ }
+}
+// Actualizar la insignia cada 30 segundos
+setInterval(() => { if (me) updateChatBadge(); }, 30000);
 
 bottomnav.addEventListener('click', e => {
   const b = e.target.closest('button[data-nav]');
@@ -812,6 +827,136 @@ function viewNew() {
       const el = $('#err'); el.textContent = err.message; el.classList.remove('hidden');
     }
   });
+}
+
+// ---------- Chat tipo Messenger ----------
+let chatPollTimer = null;
+function stopChatPoll() { if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; } }
+
+async function viewChatList() {
+  stopChatPoll();
+  setNav('chat');
+  app.innerHTML = `${topbar('Chat')}<div class="loading">Cargando…</div>`;
+  try {
+    const { conversations } = await api('/api/chat/conversations');
+    const items = conversations.map(c => `
+      <div class="row" data-go="#/chat/${c.id}" style="cursor:pointer">
+        ${avatarHTML(c.other)}
+        <div class="grow"><b>${esc(c.other.name)}</b>
+          <small>${c.lastMessage ? esc(c.lastMessage.text.slice(0, 60)) : 'Sin mensajes aún'}</small></div>
+        ${c.unread ? `<span class="badge" style="position:static">${c.unread}</span>` : ''}
+      </div>`).join('');
+    app.innerHTML = `${topbar('Chat')}
+      <div style="padding:12px">
+        <button class="btn" id="btn-new-chat" style="width:100%">✏️ Nuevo mensaje</button>
+        <div id="chat-list" style="margin-top:8px">
+          ${items || '<p class="sub" style="text-align:center;padding:24px">Sin conversaciones.<br>Toca "Nuevo mensaje" para chatear con un familiar.</p>'}
+        </div>
+      </div>`;
+    $('#btn-new-chat').onclick = () => openNewChatSheet();
+    chatPollTimer = setInterval(async () => {
+      if (!location.hash.startsWith('#/chat') || location.hash.length > 6) return;
+      try {
+        const { conversations: fresh } = await api('/api/chat/conversations');
+        const el = $('#chat-list');
+        if (el && fresh.length !== conversations.length) viewChatList();
+      } catch (e) {}
+    }, 15000);
+  } catch (err) { app.innerHTML = `${topbar('Chat')}<p class="sub" style="padding:24px">${esc(err.message)}</p>`; }
+}
+
+async function openNewChatSheet() {
+  try {
+    const { users } = await api('/api/users/admin/users').catch(() => ({ users: null }));
+    let list;
+    if (users) {
+      list = users.filter(u => u.id !== me.id && !u.is_placeholder);
+    } else {
+      const t = await api('/api/tree');
+      list = (t.members || []).filter(m => m.id !== me.id && !m.is_placeholder);
+    }
+    openSheet(`<div class="sheet-body"><h3 style="margin-top:0">Nuevo mensaje</h3>
+      <input id="chat-search" placeholder="🔍 Buscar familiar…" style="margin-bottom:8px">
+      <div id="chat-users" style="max-height:50vh;overflow:auto"></div></div>`);
+    const render = q => {
+      const f = list.filter(u => !q || (u.name || '').toLowerCase().includes(q.toLowerCase()));
+      $('#chat-users').innerHTML = f.map(u => `
+        <div class="row" data-uid="${u.id}" style="cursor:pointer">${avatarHTML(u)}
+          <div class="grow"><b>${esc(u.name)}</b></div></div>`).join('')
+        || '<p class="sub">Sin resultados.</p>';
+      $$('#chat-users [data-uid]').forEach(r => r.onclick = async () => {
+        try {
+          const { conversation } = await api('/api/chat/conversations', {
+            method: 'POST', body: JSON.stringify({ user_id: +r.dataset.uid }) });
+          closeSheet(); location.hash = '#/chat/' + conversation.id;
+        } catch (e) { toast(e.message); }
+      });
+    };
+    render('');
+    $('#chat-search').oninput = e => render(e.target.value);
+  } catch (e) { toast(e.message); }
+}
+
+async function viewChatThread(cid) {
+  stopChatPoll();
+  setNav('chat');
+  app.innerHTML = `${topbar('Chat')}<div class="loading">Cargando…</div>`;
+  let other = null, lastId = 0;
+  const renderMsg = m => {
+    const mine = m.sender_id === me.id;
+    return `<div class="msg ${mine ? 'mine' : 'theirs'}">
+      <div class="bubble">${esc(m.text).replace(/\n/g, '<br>')}</div>
+      <small>${new Date(m.created_at + 'Z').toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small>
+    </div>`;
+  };
+  try {
+    const data = await api(`/api/chat/conversations/${cid}/messages`);
+    other = data.other;
+    if (!other) { location.hash = '#/chat'; return; }
+    app.innerHTML = `
+      <div class="chat-head">
+        <button class="icon-btn" data-go="#/chat">←</button>
+        ${avatarHTML(other, 'avatar sm')}
+        <b style="flex:1">${esc(other.name)}</b>
+      </div>
+      <div id="chat-msgs" class="chat-msgs"></div>
+      <form id="f-chat" class="chat-form">
+        <input id="chat-input" placeholder="Escribe un mensaje…" autocomplete="off" maxlength="2000">
+        <button class="btn" type="submit">➤</button>
+      </form>`;
+    const box = $('#chat-msgs');
+    const appendMsgs = msgs => {
+      for (const m of msgs) {
+        if (m.id > lastId) { lastId = m.id; box.insertAdjacentHTML('beforeend', renderMsg(m)); }
+      }
+      box.scrollTop = box.scrollHeight;
+    };
+    appendMsgs(data.messages);
+    updateChatBadge();
+    // Polling de mensajes nuevos cada 4 segundos
+    chatPollTimer = setInterval(async () => {
+      if (!location.hash.startsWith('#/chat/')) { stopChatPoll(); return; }
+      try {
+        const d = await api(`/api/chat/conversations/${cid}/messages?limit=20`);
+        const fresh = d.messages.filter(m => m.id > lastId);
+        if (fresh.length) appendMsgs(fresh);
+      } catch (e) {}
+    }, 4000);
+    $('#f-chat').addEventListener('submit', async e => {
+      e.preventDefault();
+      const inp = $('#chat-input');
+      const text = inp.value.trim();
+      if (!text) return;
+      inp.value = '';
+      try {
+        const { message } = await api(`/api/chat/conversations/${cid}/messages`, {
+          method: 'POST', body: JSON.stringify({ text }) });
+        appendMsgs([message]);
+      } catch (err) { toast(err.message); inp.value = text; }
+    });
+  } catch (err) {
+    app.innerHTML = `${topbar('Chat')}<p class="sub" style="padding:24px">${esc(err.message)}</p>`;
+  }
 }
 
 // ---------- Perfil ----------
@@ -1873,6 +2018,8 @@ async function boot() {
     if (h === '#/tree' || h.startsWith('#/tree?')) return viewTree();
     if (h.startsWith('#/tree/suggest')) return viewSuggest();
     if (h === '#/family') return viewFamily();
+    if (h === '#/chat') return viewChatList();
+    if (h.startsWith('#/chat/')) return viewChatThread(h.slice(7));
     if (h === '#/profile') return viewProfile();
     if (h === '#/settings') return viewSettings();
     if (h === '#/admin') return viewAdmin();
