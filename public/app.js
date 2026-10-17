@@ -291,6 +291,11 @@ function viewLogin() {
         <span><b>${T('conoceBtn')}</b><p>${T('conoceSub')}</p></span>
         <span class="rc-go">›</span>
       </button>
+      <button class="btn-conoce" id="btn-install-guide" style="margin-top:8px">
+        <span class="rc-icon">📲</span>
+        <span><b>Instalar como app</b><p>Agrega GENLORIA a tu pantalla de inicio</p></span>
+        <span class="rc-go">›</span>
+      </button>
     </div>
     <div class="trust-badges">
       <div><div class="tb-icon">🛡️</div>${T('badge1')}</div>
@@ -306,6 +311,24 @@ function viewLogin() {
     localStorage.setItem('genloria-lang', appLang);
     viewLogin();
   };
+  $('#btn-install-guide').onclick = () => openSheet(`<div class="sheet-body">
+    <h3 style="margin-top:0">📲 Instalar GENLORIA como app</h3>
+    <h4>🍎 En iPhone (Safari)</h4>
+    <ol style="padding-left:20px;line-height:1.8">
+      <li>Abre <b>genloria.com</b> en Safari</li>
+      <li>Toca el botón <b>Compartir</b> (cuadrado con flecha ↑)</li>
+      <li>Elige <b>"Agregar a pantalla de inicio"</b></li>
+      <li>Toca <b>Agregar</b>. ¡Listo! Tendrás el ícono de GENLORIA</li>
+    </ol>
+    <h4>🤖 En Android (Chrome)</h4>
+    <ol style="padding-left:20px;line-height:1.8">
+      <li>Abre <b>genloria.com</b> en Chrome</li>
+      <li>Toca el menú <b>⋮</b> (tres puntos)</li>
+      <li>Elige <b>"Agregar a pantalla principal"</b> o <b>"Instalar app"</b></li>
+      <li>Confirma. ¡Listo!</li>
+    </ol>
+    <p class="sub">La app se abre a pantalla completa y se actualiza sola.</p>
+  </div>`);
   const menuBtn = $('#menu-btn'), menu = $('#login-menu');
   menuBtn.onclick = e => { e.stopPropagation(); menu.classList.toggle('hidden'); };
   document.addEventListener('click', function hideMenu(e) {
