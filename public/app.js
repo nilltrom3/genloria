@@ -1,7 +1,7 @@
 // app.js — SPA de GENLORIA (vanilla JS)
 'use strict';
 
-const APP_VERSION = '6';
+const APP_VERSION = '7';
 const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const app = $('#app');
@@ -1166,12 +1166,14 @@ async function viewFamily() {
   };
   app.innerHTML = `
     ${topbar('Familia')}
+    ${me && me.role === 'admin' ? `<div style="padding:12px 12px 0"><button class="btn" data-go="#/admin/codes" style="width:100%">✉️ Invitar a un familiar</button></div>` : ''}
     <div style="padding:12px 12px 0"><input type="search" id="fam-q" placeholder="🔍 Buscar familiar…" style="margin:0"></div>
     <div class="card" style="padding:0;overflow:hidden" id="fam-list">
       ${users.map(row).join('')}
     </div>
     <p style="text-align:center;color:var(--muted);font-size:.85rem">${users.length} persona(s) en la familia</p>`;
   const q = $('#fam-q'), list = $('#fam-list');
+  $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
   q.addEventListener('input', () => {
     const s = q.value.trim().toLowerCase();
     list.innerHTML = users.filter(u => u.name.toLowerCase().includes(s)).map(row).join('') ||
@@ -1399,6 +1401,7 @@ async function viewAdmin(tab) {
   function showCodes() {
     body.innerHTML = `
       <h3 style="margin-top:0">Nuevo código de invitación</h3>
+      <p class="sub" style="margin-top:-8px">Genera un código y compártelo con tu familiar. Con ese código creará su cuenta en la pantalla de registro.</p>
       <form id="f-newcode">
         <label>Código (vacío = aleatorio)</label><input type="text" name="code" placeholder="Ej: NAVIDAD-2026">
         <label>Usos máximos (0 = ilimitado)</label><input type="text" name="maxUses" value="0" inputmode="numeric">
@@ -1407,7 +1410,8 @@ async function viewAdmin(tab) {
       <h3>Códigos</h3>
       ${codes.map(c => `<div class="row">
         <div class="grow"><b>${esc(c.code)}</b><small>${c.used_count}${c.max_uses > 0 ? '/' + c.max_uses : ''} usados · ${c.active ? 'activo' : 'desactivado'}</small></div>
-        ${c.active ? `<button class="mini-btn danger" data-deact="${c.id}">Desactivar</button>` : ''}
+        ${c.active ? `<button class="mini-btn" data-copy="${esc(c.code)}">📋 Copiar</button>
+        <button class="mini-btn danger" data-deact="${c.id}">Desactivar</button>` : ''}
       </div>`).join('') || '<p class="empty">Sin códigos</p>'}`;
     $('#f-newcode').addEventListener('submit', async e => {
       e.preventDefault();
@@ -1423,6 +1427,10 @@ async function viewAdmin(tab) {
     $$('[data-deact]', body).forEach(b => b.addEventListener('click', async () => {
       await api(`/api/users/admin/invite-codes/${b.dataset.deact}`, { method: 'DELETE' });
       viewAdmin();
+    }));
+    $$('[data-copy]', body).forEach(b => b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); toast('Código copiado 📋'); }
+      catch { toast('Código: ' + b.dataset.copy); }
     }));
   }
   function activateTab(name) {
@@ -1459,6 +1467,7 @@ async function boot() {
     if (h === '#/profile') return viewProfile();
     if (h === '#/settings') return viewSettings();
     if (h === '#/admin') return viewAdmin();
+    if (h === '#/admin/codes') return viewAdmin('codes');
     const m = h.match(/^#\/u\/(.+)$/);
     if (m) return viewProfile(decodeURIComponent(m[1]));
     location.hash = '#/feed';
