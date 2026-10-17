@@ -21,7 +21,7 @@ const PERSON_FIELDS = ['nickname', 'maiden_name', 'sex', 'birth_place',
   'military_service', 'notes', 'color'];
 
 function publicUser(u) {
-  const p = { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null, is_deceased: !!u.is_deceased, is_placeholder: !!u.is_placeholder, color: u.color || null };
+  const p = { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null, is_deceased: !!u.is_deceased, is_placeholder: !!u.is_placeholder, color: u.color || null, family_id: u.family_id || null };
   for (const f of PERSON_FIELDS) p[f] = u[f] || null;
   return p;
 }
@@ -93,36 +93,66 @@ function findValidReset(db, code) {
   return null;
 }
 
-// Registro — requiere código de invitación válido. Cada familiar elige su propia clave.
+// Registro — dos modos: crear una familia nueva (el usuario es admin) o
+// unirse a una familia existente con su código de invitación.
 router.post('/register', authLimiter, (req, res) => {
-  const { name, email, password, inviteCode } = req.body || {};
+  const { name, email, password, inviteCode, mode, familyName } = req.body || {};
   if (typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 60)
     return res.status(400).json({ error: 'El nombre debe tener entre 2 y 60 caracteres.' });
   if (!validEmail(email))
     return res.status(400).json({ error: 'Escribe un correo electrónico válido.' });
   if (typeof password !== 'string' || password.length < 8 || password.length > 72)
     return res.status(400).json({ error: 'La contraseña debe tener entre 8 y 72 caracteres.' });
-  if (typeof inviteCode !== 'string' || !inviteCode.trim())
-    return res.status(400).json({ error: 'Se requiere un código de invitación.' });
-
-  const code = db.prepare('SELECT * FROM invite_codes WHERE code = ? AND active = 1').get(inviteCode.trim().toUpperCase());
-  if (!code) return res.status(403).json({ error: 'Código de invitación inválido o desactivado.' });
-  if (code.max_uses > 0 && code.used_count >= code.max_uses)
-    return res.status(403).json({ error: 'Este código de invitación ya se agotó.' });
 
   const emailNorm = email.trim().toLowerCase();
   const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(emailNorm);
   if (exists) return res.status(409).json({ error: 'Ese correo ya está registrado.' });
 
+  let familyId, role = 'member';
+  if (mode === 'create') {
+    const fname = (familyName || '').toString().trim();
+    if (fname.length < 2 || fname.length > 80)
+      return res.status(400).json({ error: 'El nombre de la familia debe tener entre 2 y 80 caracteres.' });
+    // Crear la familia con un código de invitación único
+    let code, tries = 0;
+    do {
+      code = 'FAMILIA-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+      tries++;
+    } while (db.prepare('SELECT id FROM families WHERE invite_code = ?').get(code) && tries < 10);
+    const fam = db.prepare('INSERT INTO families (name, invite_code) VALUES (?,?)').run(fname, code);
+    familyId = fam.lastInsertRowid;
+    role = 'admin';
+  } else {
+    // Unirse con código de invitación de la familia
+    if (typeof inviteCode !== 'string' || !inviteCode.trim())
+      return res.status(400).json({ error: 'Se requiere un código de invitación.' });
+    const fam = db.prepare('SELECT * FROM families WHERE invite_code = ?').get(inviteCode.trim().toUpperCase());
+    if (!fam) {
+      // Compatibilidad: buscar en códigos de invitación tradicionales con familia
+      const code = db.prepare('SELECT * FROM invite_codes WHERE code = ? AND active = 1').get(inviteCode.trim().toUpperCase());
+      if (!code) return res.status(403).json({ error: 'Código de invitación inválido o desactivado.' });
+      if (code.max_uses > 0 && code.used_count >= code.max_uses)
+        return res.status(403).json({ error: 'Este código de invitación ya se agotó.' });
+      db.prepare('UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?').run(code.id);
+      familyId = code.family_id;
+    } else {
+      familyId = fam.id;
+    }
+    if (!familyId) return res.status(403).json({ error: 'Código de invitación inválido.' });
+  }
+
   const username = deriveUsername(db, emailNorm, name.trim());
   const hash = bcrypt.hashSync(password, 12);
-  const info = db.prepare('INSERT INTO users (username, name, email, password_hash) VALUES (?,?,?,?)')
-    .run(username, name.trim(), emailNorm, hash);
-  db.prepare('UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?').run(code.id);
+  const info = db.prepare('INSERT INTO users (username, name, email, password_hash, family_id, role) VALUES (?,?,?,?,?,?)')
+    .run(username, name.trim(), emailNorm, hash, familyId, role);
+  if (mode === 'create') {
+    db.prepare('UPDATE families SET created_by = ? WHERE id = ?').run(info.lastInsertRowid, familyId);
+  }
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   req.session.userId = user.id;
-  res.status(201).json({ user: publicUser(user) });
+  const famInfo = db.prepare('SELECT id, name, invite_code FROM families WHERE id = ?').get(familyId);
+  res.status(201).json({ user: publicUser(user), family: famInfo });
 });
 
 // Login con correo electrónico (o usuario, por compatibilidad)
@@ -200,7 +230,19 @@ router.get('/me', (req, res) => {
   if (!req.session.userId) return res.status(401).json({ error: 'No has iniciado sesión.' });
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
   if (!user) return res.status(401).json({ error: 'Sesión inválida.' });
-  res.json({ user: publicUser(user) });
+  const family = user.family_id
+    ? db.prepare('SELECT id, name, invite_code FROM families WHERE id = ?').get(user.family_id)
+    : null;
+  res.json({ user: publicUser(user), family });
+});
+
+// Info de mi familia (nombre y código para invitar)
+router.get('/my-family', requireAuth, (req, res) => {
+  const fid = db.getFamilyId(req.session.userId);
+  if (!fid) return res.status(404).json({ error: 'Sin familia asignada.' });
+  const family = db.prepare('SELECT id, name, invite_code, created_at FROM families WHERE id = ?').get(fid);
+  const memberCount = db.prepare('SELECT COUNT(*) c FROM users WHERE family_id = ?').get(fid).c;
+  res.json({ family: { ...family, memberCount } });
 });
 
 module.exports = { router, publicUser, issueRecoveryCode, validEmail, cleanPersonFields, PERSON_FIELDS };

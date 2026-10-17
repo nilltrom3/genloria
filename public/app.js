@@ -397,6 +397,10 @@ function viewRegister() {
     <div class="login-card" style="margin-top:24px">
       <h2>👥 ${T('registerTitle')}</h2>
       <p class="sub">${T('registerSub')}</p>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button type="button" id="mode-create" class="btn" style="flex:1">🌳 Crear mi familia</button>
+        <button type="button" id="mode-join" class="btn-ghost" style="flex:1;border:1px solid var(--border)">🎫 Unirme con código</button>
+      </div>
       <form id="f-reg">
         <div class="login-field">
           <span class="fi">👤</span>
@@ -410,9 +414,13 @@ function viewRegister() {
           <span class="fi">🔒</span>
           <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="${T('password')} (mín. 8)">
         </div>
-        <div class="login-field">
+        <div class="login-field" id="field-familyname">
+          <span class="fi">🌳</span>
+          <input type="text" name="familyName" maxlength="80" placeholder="Nombre de tu familia (ej: Familia De La Cruz)">
+        </div>
+        <div class="login-field hidden" id="field-invitecode">
           <span class="fi">🎫</span>
-          <input type="text" name="inviteCode" required placeholder="${T('inviteCode')}" style="text-transform:uppercase">
+          <input type="text" name="inviteCode" placeholder="${T('inviteCode')}" style="text-transform:uppercase">
         </div>
         <div class="login-error" id="err"></div>
         <button class="btn-login" type="submit">${T('createBtn')}</button>
@@ -420,6 +428,24 @@ function viewRegister() {
       <p class="link" style="text-align:center;margin-top:14px"><a href="#/login">${T('hasAccount')}</a></p>
     </div>
   </div>`;
+  let regMode = 'create';
+  const btnC = $('#mode-create'), btnJ = $('#mode-join');
+  const fFam = $('#field-familyname'), fCode = $('#field-invitecode');
+  function setMode(m) {
+    regMode = m;
+    const isC = m === 'create';
+    btnC.className = isC ? 'btn' : 'btn-ghost';
+    btnC.style.cssText = isC ? 'flex:1' : 'flex:1;border:1px solid var(--border)';
+    btnJ.className = isC ? 'btn-ghost' : 'btn';
+    btnJ.style.cssText = isC ? 'flex:1;border:1px solid var(--border)' : 'flex:1';
+    fFam.classList.toggle('hidden', !isC);
+    fCode.classList.toggle('hidden', isC);
+    fFam.querySelector('input').required = isC;
+    fCode.querySelector('input').required = !isC;
+  }
+  btnC.onclick = () => setMode('create');
+  btnJ.onclick = () => setMode('join');
+  setMode('create');
   $('#lang-btn').onclick = () => {
     appLang = appLang === 'es' ? 'en' : 'es';
     localStorage.setItem('genloria-lang', appLang);
@@ -429,15 +455,21 @@ function viewRegister() {
     e.preventDefault();
     const fd = new FormData(e.target);
     try {
-      const { user } = await api('/api/auth/register', {
+      const { user, family } = await api('/api/auth/register', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: fd.get('name'), email: fd.get('email'),
-          password: fd.get('password'), inviteCode: fd.get('inviteCode')
+          password: fd.get('password'), mode: regMode,
+          familyName: fd.get('familyName'), inviteCode: fd.get('inviteCode')
         })
       });
       me = user;
-      toast('¡Bienvenido a la familia! 🎉');
+      if (regMode === 'create' && family) {
+        toast(`¡Familia "${family.name}" creada! 🎉 Tu código: ${family.invite_code}`);
+      } else {
+        toast('¡Bienvenido a la familia! 🎉');
+      }
       viewClaimIdentity(); // paso 2: ¿ya estás en el árbol?
     } catch (err) {
       $('#err').textContent = err.message;
@@ -1938,11 +1970,12 @@ function viewConoce() {
     <div class="conoce-sec reveal">
       <h2>¿Qué es <span class="em">GENLORIA</span>?</h2>
       <p>GENLORIA es una plataforma social familiar privada que combina las funciones de una red social moderna con un árbol genealógico interactivo.</p>
+      <p>Cualquier persona puede registrarse gratuitamente en GENLORIA y crear su propio espacio familiar privado. Para formar parte de una familia ya existente, es necesario recibir una invitación de uno de sus miembros autorizados.</p>
       <p>Cada familia dispone de su propio espacio digital, donde sus miembros autorizados pueden:</p>
       <div class="conoce-feats">
         <div class="conoce-feat"><span class="fi">📸</span><small>Compartir fotografías, videos e historias familiares.</small></div>
         <div class="conoce-feat"><span class="fi">💬</span><small>Comentar y reaccionar a las publicaciones.</small></div>
-        <div class="conoce-feat"><span class="fi">🌳</span><small>Construir y explorar su árbol genealógico.</small></div>
+        <div class="conoce-feat"><span class="fi">🌳</span><small>Construir tu árbol genealógico con padres, abuelos, bisabuelos, antepasados y nuevas generaciones, incluyendo familiares vivos o fallecidos, incluso si nunca han tenido una cuenta en GENLORIA.</small></div>
         <div class="conoce-feat"><span class="fi">🧬</span><small>Descubrir relaciones de parentesco entre generaciones.</small></div>
         <div class="conoce-feat"><span class="fi">📖</span><small>Crear perfiles y biografías de familiares.</small></div>
         <div class="conoce-feat"><span class="fi">🕯️</span><small>Preservar recuerdos de antepasados y seres queridos.</small></div>
@@ -1950,6 +1983,7 @@ function viewConoce() {
         <div class="conoce-feat"><span class="fi">🔒</span><small>Cada familia controla quién accede a su contenido.</small></div>
       </div>
       <p style="margin-top:14px"><b>Tu familia. Tu espacio. Tu historia.</b></p>
+      <p style="margin-top:8px"><small>Las personas representadas en el árbol genealógico no necesitan registrarse en GENLORIA. Solo los usuarios autorizados pueden acceder al espacio social privado de su familia.</small></p>
     </div>
 
     <div class="conoce-sec reveal">
@@ -1961,7 +1995,8 @@ function viewConoce() {
     </div>
 
     <div class="conoce-sec reveal">
-      <h2><span class="em">GEN</span> + <span class="em">LORIA</span>: el significado de nuestro nombre</h2>
+      <h2><span class="em">GEN</span> + <span class="em">LORIA</span>: nuestro nombre en dos ideas</h2>
+      <p>Las ocho letras anteriores se resumen en dos partes:</p>
       <div class="conoce-split">
         <div class="box"><span class="tag">GEN</span><b>Generaciones y genealogía</b><small>Representa a las personas, los vínculos familiares y la conexión entre generaciones.</small></div>
         <div class="box"><span class="tag">LORIA</span><b>Legado, Origen, Raíces, Identidad y Árbol</b><small>Representa la historia familiar, su memoria y la continuidad de su legado.</small></div>
@@ -1999,6 +2034,7 @@ function viewConoce() {
     <div class="conoce-sec reveal">
       <h2>Una red social <span class="em">diferente</span></h2>
       <p>Las redes sociales tradicionales están diseñadas para conectar personas con el mundo. GENLORIA tiene un propósito diferente: <b>conectar a las personas con quienes forman parte de su historia.</b></p>
+      <p>Cada familia cuenta con su propio espacio privado e independiente, con acceso controlado mediante invitaciones. Solo los miembros autorizados pueden ver y compartir el contenido de su familia.</p>
       <p>Aquí, lo importante no es conseguir seguidores ni hacer publicaciones virales. Lo importante es compartir un cumpleaños, recordar a un abuelo, conocer a un primo lejano, descubrir una fotografía antigua o escuchar una historia que nunca antes habíamos conocido.</p>
       <p>GENLORIA está pensada para que esos pequeños momentos familiares tengan un lugar especial.</p>
     </div>
@@ -2009,6 +2045,7 @@ function viewConoce() {
     </div>
 
     <div class="conoce-sec" style="text-align:center">
+      <p style="max-width:640px;margin:0 auto 18px">Tu historia familiar merece un lugar especial. Comienza hoy a conectar generaciones, compartir recuerdos y construir un legado que perdure.</p>
       <div class="conoce-cta">
         <button class="btn" data-go="#/register">Crear mi familia</button>
         <button class="btn-ghost" data-go="#/login" style="border-color:var(--border);color:var(--text)">← Volver</button>

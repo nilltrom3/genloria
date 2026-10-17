@@ -11,6 +11,14 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
+CREATE TABLE IF NOT EXISTS families (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  invite_code TEXT UNIQUE NOT NULL,
+  created_by INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE NOT NULL COLLATE NOCASE,
@@ -19,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_path TEXT,
   bio TEXT DEFAULT '',
   role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin','member')),
+  family_id INTEGER REFERENCES families(id) ON DELETE SET NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -114,6 +123,30 @@ for (const col of [
   const exists = db.prepare('PRAGMA table_info(users)').all().some(c => c.name === col);
   if (!exists) db.prepare(`ALTER TABLE users ADD COLUMN ${col} TEXT DEFAULT ''`).run();
 }
+
+// Migración multi-familia: family_id en users, invite_codes, posts, stories
+for (const [tbl] of [['users'], ['invite_codes'], ['posts'], ['stories']]) {
+  const exists = db.prepare(`PRAGMA table_info(${tbl})`).all().some(c => c.name === 'family_id');
+  if (!exists) db.prepare(`ALTER TABLE ${tbl} ADD COLUMN family_id INTEGER REFERENCES families(id)`).run();
+}
+
+// Crear familia por defecto y asignar datos existentes
+try {
+  const famCount = db.prepare('SELECT COUNT(*) n FROM families').get().n;
+  if (famCount === 0) {
+    const code = 'FAMILIA-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get();
+    const fam = db.prepare('INSERT INTO families (name, invite_code, created_by) VALUES (?,?,?)')
+      .run('Mi Familia', code, admin ? admin.id : null);
+    const fid = fam.lastInsertRowid;
+    db.prepare('UPDATE users SET family_id = ? WHERE family_id IS NULL').run(fid);
+    db.prepare('UPDATE invite_codes SET family_id = ? WHERE family_id IS NULL').run(fid);
+    // Posts y stories heredan la familia de su autor
+    db.prepare(`UPDATE posts SET family_id = (SELECT family_id FROM users WHERE users.id = posts.author_id) WHERE family_id IS NULL`).run();
+    db.prepare(`UPDATE stories SET family_id = (SELECT family_id FROM users WHERE users.id = stories.author_id) WHERE family_id IS NULL`).run();
+    console.log(`[db] Familia por defecto creada (id=${fid}, código=${code}).`);
+  }
+} catch (e) { console.error('[db] Error migración multi-familia:', e.message); }
 if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'is_deceased')) {
   db.prepare('ALTER TABLE users ADD COLUMN is_deceased INTEGER NOT NULL DEFAULT 0').run();
 }
@@ -178,5 +211,11 @@ setInterval(() => {
     if (r.changes > 0) console.log(`[db] Historias vencidas eliminadas: ${r.changes}`);
   } catch (e) { console.error('[db] Error limpiando historias:', e.message); }
 }, 15 * 60 * 1000).unref();
+
+// Helper: obtiene el family_id del usuario de la sesión (para scoping multi-familia)
+db.getFamilyId = function(userId) {
+  const u = db.prepare('SELECT family_id FROM users WHERE id = ?').get(userId);
+  return u ? u.family_id : null;
+};
 
 module.exports = db;

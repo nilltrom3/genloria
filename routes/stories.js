@@ -36,11 +36,16 @@ function requireAuth(req, res, next) {
 // Historias vigentes agrupadas por usuario (las vencidas se excluyen y se purgan)
 router.get('/', (req, res) => {
   db.prepare("DELETE FROM stories WHERE expires_at <= datetime('now')").run();
-  const rows = db.prepare(`SELECT s.id, s.media_path, s.media_type, s.created_at, s.expires_at,
+  const meId = req.session.userId;
+  const fid = meId ? db.getFamilyId(meId) : null;
+  let sql = `SELECT s.id, s.media_path, s.media_type, s.created_at, s.expires_at,
     u.id AS uid, u.username, u.name, u.avatar_path
     FROM stories s JOIN users u ON u.id = s.user_id
-    WHERE s.expires_at > datetime('now')
-    ORDER BY s.created_at DESC`).all();
+    WHERE s.expires_at > datetime('now')`;
+  const params = [];
+  if (fid) { sql += ' AND s.family_id = ?'; params.push(fid); }
+  sql += ' ORDER BY s.created_at DESC';
+  const rows = db.prepare(sql).all(...params);
   const groups = new Map();
   for (const r of rows) {
     if (!groups.has(r.uid)) groups.set(r.uid, {
@@ -64,9 +69,10 @@ router.post('/', requireAuth, upload.single('media'), (req, res) => {
     fs.unlinkSync(req.file.path);
     return res.status(413).json({ error: `El archivo supera el límite (${cap} MB).` });
   }
+  const fid = db.getFamilyId(req.session.userId);
   const info = db.prepare(
-    "INSERT INTO stories (user_id, media_path, media_type, expires_at) VALUES (?,?,?, datetime('now', '+24 hours'))"
-  ).run(req.session.userId, '/uploads/' + path.basename(req.file.path), type);
+    "INSERT INTO stories (user_id, media_path, media_type, family_id, expires_at) VALUES (?,?,?,?, datetime('now', '+24 hours'))"
+  ).run(req.session.userId, '/uploads/' + path.basename(req.file.path), type, fid);
   res.status(201).json({ story: { id: info.lastInsertRowid } });
 });
 

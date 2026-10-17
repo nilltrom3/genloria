@@ -59,13 +59,15 @@ router.get('/conversations', requireAuth, (req, res) => {
   res.json({ conversations: rows.map(r => conversationSummary(r.id, meId)).filter(c => c.other) });
 });
 
-// Iniciar o abrir conversación con un usuario
+// Iniciar o abrir conversación con un usuario (solo de mi familia)
 router.post('/conversations', requireAuth, (req, res) => {
   const meId = req.session.userId;
   const otherId = parseInt((req.body || {}).user_id, 10);
   if (!otherId || otherId === meId) return res.status(400).json({ error: 'Usuario inválido.' });
-  const other = db.prepare("SELECT id FROM users WHERE id = ? AND is_placeholder = 0").get(otherId);
+  const other = db.prepare("SELECT id, family_id FROM users WHERE id = ? AND is_placeholder = 0").get(otherId);
   if (!other) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  const myFam = db.getFamilyId(meId);
+  if (other.family_id !== myFam) return res.status(403).json({ error: 'Ese usuario no es de tu familia.' });
   const cid = getOrCreateConversation(meId, otherId);
   res.json({ conversation: conversationSummary(cid, meId) });
 });

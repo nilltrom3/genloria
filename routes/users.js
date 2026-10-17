@@ -102,7 +102,8 @@ router.put('/me/password', requireAuth, (req, res) => {
 
 // Lista de usuarios
 router.get('/admin/users', requireAuth, requireAdmin, (req, res) => {
-  const rows = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
+  const fid = db.getFamilyId(req.session.userId);
+  const rows = db.prepare('SELECT * FROM users WHERE family_id = ? ORDER BY created_at DESC').all(fid);
   res.json({ users: rows.map(publicUser) });
 });
 
@@ -125,8 +126,9 @@ router.post('/admin/users', requireAuth, requireAdmin, (req, res) => {
   let username = base, i = 1;
   while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) username = `${base}${i++}`;
   const unusable = bcrypt.hashSync(require('crypto').randomBytes(32).toString('hex'), 10);
-  const info = db.prepare('INSERT INTO users (username, name, email, password_hash, role) VALUES (?,?,?,?,?)')
-    .run(username, name.trim(), emailNorm, unusable, role === 'admin' ? 'admin' : 'member');
+  const fid = db.getFamilyId(req.session.userId);
+  const info = db.prepare('INSERT INTO users (username, name, email, password_hash, role, family_id) VALUES (?,?,?,?,?,?)')
+    .run(username, name.trim(), emailNorm, unusable, role === 'admin' ? 'admin' : 'member', fid);
   const setupCode = issueRecoveryCode(db, info.lastInsertRowid);
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({ user: publicUser(u), setupCode });
@@ -159,12 +161,13 @@ router.post('/admin/people', requireAuth, requireAdmin, avatarUpload.single('pho
     'is_deceased', 'death_date', 'death_place', 'death_cause', 'burial_place',
     'occupation', 'education', 'religion', 'nationality', 'residence', 'military_service', 'notes'];
   const avatar_path = req.file ? '/uploads/' + path.basename(req.file.path) : null;
+  const fid = db.getFamilyId(req.session.userId);
   const info = db.prepare(`INSERT INTO users
-    (username, name, email, password_hash, role, is_placeholder, avatar_path, bio, birthdate, phone, ${cols.join(', ')})
-    VALUES (?,?,?,?,?,?,?,?,?,?,${cols.map(() => '?').join(',')})`)
+    (username, name, email, password_hash, role, is_placeholder, avatar_path, bio, birthdate, phone, family_id, ${cols.join(', ')})
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,${cols.map(() => '?').join(',')})`)
     .run(username, name, emailNorm, unusable, 'member', withAccount ? 0 : 1, avatar_path,
       (b.bio || '').toString().trim().slice(0, 300),
-      birthdate, (b.phone || '').toString().trim().slice(0, 30) || null,
+      birthdate, (b.phone || '').toString().trim().slice(0, 30) || null, fid,
       ...cols.map(c => pf[c]));
   const newId = info.lastInsertRowid;
   const linkErrs = [];

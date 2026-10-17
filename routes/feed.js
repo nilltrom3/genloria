@@ -57,16 +57,20 @@ function enrichPost(row, meId) {
   };
 }
 
-// Feed: publicaciones recientes con autor, likes y conteo de comentarios
+// Feed: publicaciones recientes con autor, likes y conteo de comentarios (solo mi familia)
 router.get('/', (req, res) => {
   const meId = req.session.userId || null;
+  const fid = meId ? db.getFamilyId(meId) : null;
   const limit = Math.min(parseInt(req.query.limit || '30', 10), 100);
   const before = req.query.before; // paginación por fecha
   let sql = `SELECT p.id AS post_id, p.text, p.media_path, p.media_type, p.created_at,
              u.id AS uid, u.username, u.name, u.avatar_path
              FROM posts p JOIN users u ON u.id = p.user_id`;
   const params = [];
-  if (before) { sql += ' WHERE p.created_at < ?'; params.push(before); }
+  const wheres = [];
+  if (fid) { wheres.push('p.family_id = ?'); params.push(fid); }
+  if (before) { wheres.push('p.created_at < ?'); params.push(before); }
+  if (wheres.length) sql += ' WHERE ' + wheres.join(' AND ');
   sql += ' ORDER BY p.created_at DESC LIMIT ?';
   params.push(limit);
   const rows = db.prepare(sql).all(...params);
@@ -88,8 +92,9 @@ router.post('/', requireAuth, upload.single('media'), (req, res) => {
     media_type = type;
   }
   if (!text && !media_path) return res.status(400).json({ error: 'Escribe algo o adjunta una foto/video.' });
-  const info = db.prepare('INSERT INTO posts (user_id, text, media_path, media_type) VALUES (?,?,?,?)')
-    .run(req.session.userId, text, media_path, media_type);
+  const fid = db.getFamilyId(req.session.userId);
+  const info = db.prepare('INSERT INTO posts (user_id, text, media_path, media_type, family_id) VALUES (?,?,?,?,?)')
+    .run(req.session.userId, text, media_path, media_type, fid);
   const row = db.prepare(`SELECT p.id AS post_id, p.text, p.media_path, p.media_type, p.created_at,
                           u.id AS uid, u.username, u.name, u.avatar_path
                           FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`)
@@ -102,7 +107,9 @@ router.post('/', requireAuth, upload.single('media'), (req, res) => {
 router.put('/:id', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Publicación no encontrada.' });
-  const me = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  const me = db.prepare('SELECT role, family_id FROM users WHERE id = ?').get(req.session.userId);
+  if (post.family_id !== me.family_id)
+    return res.status(403).json({ error: 'No tienes permiso.' });
   if (post.user_id !== req.session.userId && me.role !== 'admin')
     return res.status(403).json({ error: 'No tienes permiso.' });
   const text = (req.body.text || '').toString().trim().slice(0, 2000);
@@ -113,7 +120,9 @@ router.put('/:id', requireAuth, (req, res) => {
 router.delete('/:id', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Publicación no encontrada.' });
-  const me = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  const me = db.prepare('SELECT role, family_id FROM users WHERE id = ?').get(req.session.userId);
+  if (post.family_id !== me.family_id)
+    return res.status(403).json({ error: 'No tienes permiso.' });
   if (post.user_id !== req.session.userId && me.role !== 'admin')
     return res.status(403).json({ error: 'No tienes permiso.' });
   if (post.media_path) {
@@ -126,8 +135,10 @@ router.delete('/:id', requireAuth, (req, res) => {
 
 // Like / unlike (toggle)
 router.post('/:id/like', requireAuth, (req, res) => {
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
+  const post = db.prepare('SELECT id, family_id FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Publicación no encontrada.' });
+  const fid = db.getFamilyId(req.session.userId);
+  if (post.family_id !== fid) return res.status(403).json({ error: 'No tienes permiso.' });
   const existing = db.prepare('SELECT 1 FROM likes WHERE post_id = ? AND user_id = ?')
     .get(post.id, req.session.userId);
   if (existing) db.prepare('DELETE FROM likes WHERE post_id = ? AND user_id = ?').run(post.id, req.session.userId);
@@ -149,8 +160,10 @@ router.get('/:id/comments', (req, res) => {
 
 // Comentar
 router.post('/:id/comments', requireAuth, (req, res) => {
-  const post = db.prepare('SELECT id FROM posts WHERE id = ?').get(req.params.id);
+  const post = db.prepare('SELECT id, family_id FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Publicación no encontrada.' });
+  const fid = db.getFamilyId(req.session.userId);
+  if (post.family_id !== fid) return res.status(403).json({ error: 'No tienes permiso.' });
   const text = (req.body.text || '').toString().trim().slice(0, 500);
   if (!text) return res.status(400).json({ error: 'El comentario no puede estar vacío.' });
   const info = db.prepare('INSERT INTO comments (post_id, user_id, text) VALUES (?,?,?)')

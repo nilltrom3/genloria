@@ -40,6 +40,9 @@ function addParentLink(parentId, childId, linkType, linkSet) {
   linkSet = linkSet === 2 ? 2 : 1;
   if (!userExists(parentId) || !userExists(childId)) return 'Una de las personas no existe.';
   if (parentId === childId) return 'Una persona no puede ser su propio padre/madre.';
+  const pf = db.prepare('SELECT family_id FROM users WHERE id = ?').get(parentId);
+  const cf = db.prepare('SELECT family_id FROM users WHERE id = ?').get(childId);
+  if (!pf || !cf || pf.family_id !== cf.family_id) return 'Las personas deben ser de la misma familia.';
   if (db.prepare('SELECT 1 FROM parent_links WHERE parent_id = ? AND child_id = ?').get(parentId, childId))
     return 'Esa relación ya está registrada.';
   if (ancestorsOf(parentId).has(childId)) return 'Eso crearía un ciclo en el árbol.';
@@ -72,15 +75,23 @@ function addCouple(a, b, opts) {
 
 // ---- Lectura: todo el árbol (cualquier miembro) ----
 router.get('/', requireAuth, (req, res) => {
+  const fid = db.getFamilyId(req.session.userId);
   const users = db.prepare(`SELECT id, username, name, avatar_path, birthdate, is_deceased,
-    death_date, is_placeholder FROM users ORDER BY name`).all();
-  const pl = db.prepare('SELECT parent_id, child_id, link_type, link_set FROM parent_links').all();
+    death_date, is_placeholder FROM users WHERE family_id = ? ORDER BY name`).all(fid);
+  const userIds = users.map(u => u.id);
+  const pl = userIds.length
+    ? db.prepare(`SELECT parent_id, child_id, link_type, link_set FROM parent_links
+        WHERE child_id IN (${userIds.map(() => '?').join(',')})`).all(...userIds)
+    : [];
   const parents = {}, parentMeta = {};
   for (const r of pl) {
     (parents[r.child_id] = parents[r.child_id] || []).push(r.parent_id);
     parentMeta[`${r.parent_id}:${r.child_id}`] = { link_type: r.link_type, link_set: r.link_set };
   }
-  const couples = db.prepare('SELECT user1_id, user2_id, marriage_date, marriage_place, status FROM couples').all();
+  const couples = userIds.length
+    ? db.prepare(`SELECT user1_id, user2_id, marriage_date, marriage_place, status FROM couples
+        WHERE user1_id IN (${userIds.map(() => '?').join(',')})`).all(...userIds)
+    : [];
   const couplePairs = couples.map(r => [r.user1_id, r.user2_id]);
   const coupleMeta = {};
   for (const r of couples) coupleMeta[`${r.user1_id}:${r.user2_id}`] = { marriage_date: r.marriage_date, marriage_place: r.marriage_place, status: r.status };

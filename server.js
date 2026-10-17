@@ -83,9 +83,15 @@ function seed() {
   db.prepare('INSERT INTO users (username, name, password_hash, role) VALUES (?,?,?,?)')
     .run(adminUser, 'Administrador', bcrypt.hashSync(adminPass, 12), 'admin');
   const adminId = db.prepare('SELECT id FROM users WHERE username = ?').get(adminUser).id;
+  // Asignar el admin a la familia por defecto (creada en la migración de db.js)
+  const defFam = db.prepare('SELECT id FROM families ORDER BY id LIMIT 1').get();
+  if (defFam) {
+    db.prepare('UPDATE users SET family_id = ?, role = ? WHERE id = ?').run(defFam.id, 'admin', adminId);
+    db.prepare('UPDATE families SET created_by = ? WHERE id = ?').run(adminId, defFam.id);
+  }
   const invite = process.env.INVITE_CODE || 'FAMILIA-2026';
-  db.prepare('INSERT INTO invite_codes (code, created_by, max_uses) VALUES (?,?,0)')
-    .run(invite.toUpperCase(), adminId);
+  db.prepare('INSERT INTO invite_codes (code, created_by, max_uses, family_id) VALUES (?,?,0,?)')
+    .run(invite.toUpperCase(), adminId, defFam ? defFam.id : null);
   console.log('──────────────────────────────────────────────');
   console.log('[init] Cuenta admin creada:');
   console.log(`[init]   usuario: ${adminUser}`);
