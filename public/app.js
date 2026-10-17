@@ -1,7 +1,7 @@
 // app.js — SPA de GENLORIA (vanilla JS)
 'use strict';
 
-const APP_VERSION = '5';
+const APP_VERSION = '6';
 const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const app = $('#app');
@@ -103,6 +103,44 @@ bottomnav.addEventListener('click', e => {
   if (b) location.hash = b.dataset.nav;
 });
 
+// ---------- Idioma (login) ----------
+let appLang = localStorage.getItem('genloria-lang') || 'es';
+const STR = {
+  es: {
+    hello: '¡Hola!', loginSub: 'Inicia sesión para continuar tu historia.',
+    emailUser: 'Correo electrónico o usuario', password: 'Contraseña',
+    login: 'Entrar', remember: 'Mantener sesión iniciada', forgot: '¿Olvidaste tu clave?',
+    firstTime: '¿PRIMERA VEZ?', createAccount: 'Crea tu cuenta', joinTree: 'Únete y comienza tu árbol familiar.',
+    slogan1: 'Generaciones unidas.', slogan2: 'Historias que perduran.',
+    heroDesc: 'Conecta, preserva y celebra la historia de tu familia en un solo lugar.',
+    badge1: 'Privado y seguro', badge2: 'Tu familia en un solo lugar', badge3: 'Historias que perduran',
+    needCreds: 'Escribe tu correo o usuario y tu contraseña.', loginError: 'Correo o contraseña incorrectos.',
+    registerTitle: 'Crear cuenta', registerSub: 'Únete a tu familia con el código familiar.',
+    fullName: 'Nombre completo', email: 'Correo electrónico', inviteCode: 'Código familiar',
+    createBtn: 'Crear mi cuenta', hasAccount: '¿Ya tienes cuenta? Entra',
+    recoverTitle: 'Recuperar acceso', recoverSub: 'Pide tu código al administrador de tu familia.',
+    codeLabel: 'Código de recuperación', newPass: 'Nueva contraseña (mín. 8)',
+    recoverBtn: 'Cambiar mi contraseña', backToLogin: '← Volver a entrar'
+  },
+  en: {
+    hello: 'Hello!', loginSub: 'Log in to continue your story.',
+    emailUser: 'Email or username', password: 'Password',
+    login: 'Log in', remember: 'Keep me logged in', forgot: 'Forgot your password?',
+    firstTime: 'FIRST TIME?', createAccount: 'Create your account', joinTree: 'Join and start your family tree.',
+    slogan1: 'United generations.', slogan2: 'Stories that endure.',
+    heroDesc: 'Connect, preserve and celebrate your family history in one place.',
+    badge1: 'Private and secure', badge2: 'Your family in one place', badge3: 'Stories that endure',
+    needCreds: 'Enter your email or username and password.', loginError: 'Incorrect email or password.',
+    registerTitle: 'Create account', registerSub: 'Join your family with the family code.',
+    fullName: 'Full name', email: 'Email', inviteCode: 'Family code',
+    createBtn: 'Create my account', hasAccount: 'Already have an account? Log in',
+    recoverTitle: 'Recover access', recoverSub: 'Ask your family administrator for your code.',
+    codeLabel: 'Recovery code', newPass: 'New password (min. 8)',
+    recoverBtn: 'Change my password', backToLogin: '← Back to login'
+  }
+};
+const T = k => (STR[appLang] && STR[appLang][k]) || STR.es[k] || k;
+
 // ---------- Vistas ----------
 function topbar(title, rightBtn) {
   return `<div class="topbar"><div class="logo"><img src="/icons/icon-192.png" alt="GENLORIA"> GENLORIA</div>${rightBtn || ''}</div>`;
@@ -111,59 +149,115 @@ function topbar(title, rightBtn) {
 function viewLogin() {
   setNav(null);
   app.innerHTML = `
-    ${topbar('GENLORIA')}
-    <div class="form-wrap">
-      <h1>👋 ¡Hola!</h1>
-      <p class="sub">Generaciones unidas · Historias que perduran</p>
-      <div class="card">
-        <form id="f-login">
-          <label>Correo electrónico o usuario</label>
-          <input type="text" name="email" autocomplete="username" required placeholder="tucorreo@ejemplo.com o admin">
-          <label>Contraseña</label>
-          <input type="password" name="password" autocomplete="current-password" required>
-          <div class="error hidden" id="err"></div>
-          <button class="btn" type="submit">Entrar</button>
-        </form>
+  <div class="login-page">
+    <header class="login-header">
+      <div class="login-brand"><img src="/icons/icon-192.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
+      <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
+    </header>
+    <div class="login-hero">
+      <img src="/images/login-hero.jpg" alt="Árbol familiar">
+      <div class="hero-overlay">
+        <h1>GENLORIA</h1>
+        <p class="slogan">${T('slogan1')}<br>${T('slogan2')}</p>
+        <p class="desc">${T('heroDesc')}</p>
       </div>
-      <p class="link">¿Primera vez? <a href="#/register">Crea tu cuenta con el código familiar</a></p>
-      <p class="link">¿Olvidaste tu clave? <a href="#/recover">Recupérala con tu código</a></p>
-      <p class="link" style="font-size:.75rem;opacity:.6">GENLORIA v${APP_VERSION}</p>
-    </div>`;
+    </div>
+    <div class="login-card">
+      <h2>👋 ${T('hello')}</h2>
+      <p class="sub">${T('loginSub')}</p>
+      <form id="f-login">
+        <div class="login-field">
+          <span class="fi">✉️</span>
+          <input type="text" name="email" autocomplete="username" required placeholder="${T('emailUser')}">
+        </div>
+        <div class="login-field">
+          <span class="fi">🔒</span>
+          <input type="password" name="password" id="login-pass" autocomplete="current-password" required placeholder="${T('password')}">
+          <button type="button" class="toggle-pass" id="toggle-pass" aria-label="Mostrar">👁</button>
+        </div>
+        <div class="login-error" id="err"></div>
+        <button class="btn-login" type="submit">${T('login')} →</button>
+        <div class="login-options">
+          <label><input type="checkbox" name="remember" checked> ${T('remember')}</label>
+          <a href="#/recover">${T('forgot')}</a>
+        </div>
+      </form>
+    </div>
+    <button class="register-card" data-go="#/register">
+      <span class="rc-icon">👥</span>
+      <span><small>${T('firstTime')}</small><b>${T('createAccount')}</b><p>${T('joinTree')}</p></span>
+      <span class="rc-go">›</span>
+    </button>
+    <div class="trust-badges">
+      <div><div class="tb-icon">🛡️</div>${T('badge1')}</div>
+      <div><div class="tb-icon">👥</div>${T('badge2')}</div>
+      <div><div class="tb-icon">🌿</div>${T('badge3')}</div>
+    </div>
+    <p class="login-version">GENLORIA v${APP_VERSION}</p>
+  </div>`;
+  $('#lang-btn').onclick = () => {
+    appLang = appLang === 'es' ? 'en' : 'es';
+    localStorage.setItem('genloria-lang', appLang);
+    viewLogin();
+  };
+  $('#toggle-pass').onclick = () => {
+    const p = $('#login-pass');
+    p.type = p.type === 'password' ? 'text' : 'password';
+  };
+  $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
   $('#f-login').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const btn = e.target.querySelector('[type=submit]');
+    btn.disabled = true;
     try {
       const { user } = await api('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email: fd.get('email'), password: fd.get('password') })
+        body: JSON.stringify({
+          email: fd.get('email'), password: fd.get('password'),
+          remember: fd.get('remember') === 'on'
+        })
       });
       me = user;
       location.hash = '#/feed';
     } catch (err) {
-      const el = $('#err'); el.textContent = err.message; el.classList.remove('hidden');
+      $('#err').textContent = err.message;
     }
+    btn.disabled = false;
   });
 }
 
 function viewRecover() {
   setNav(null);
   app.innerHTML = `
-    ${topbar('GENLORIA')}
-    <div class="form-wrap">
-      <h1>🔑 Recuperar clave</h1>
-      <p class="sub">Pide tu código al administrador de la familia e ingrésalo aquí para elegir una clave nueva</p>
-      <div class="card">
-        <form id="f-recover">
-          <label>Código de recuperación</label>
-          <input type="text" name="code" required placeholder="Ej: A1B2C3D4" style="text-transform:uppercase" maxlength="16">
-          <label>Nueva contraseña (mín. 8 caracteres)</label>
-          <input type="password" name="newPassword" autocomplete="new-password" required minlength="8">
-          <div class="error hidden" id="err"></div>
-          <button class="btn" type="submit">Crear mi nueva clave</button>
-        </form>
-      </div>
-      <p class="link"><a href="#/login">Volver a entrar</a></p>
-    </div>`;
+  <div class="login-page">
+    <header class="login-header">
+      <div class="login-brand"><img src="/icons/icon-192.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
+      <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
+    </header>
+    <div class="login-card" style="margin-top:24px">
+      <h2>🔑 ${T('recoverTitle')}</h2>
+      <p class="sub">${T('recoverSub')}</p>
+      <form id="f-recover">
+        <div class="login-field">
+          <span class="fi">🎫</span>
+          <input type="text" name="code" required placeholder="${T('codeLabel')}" style="text-transform:uppercase" maxlength="16">
+        </div>
+        <div class="login-field">
+          <span class="fi">🔒</span>
+          <input type="password" name="newPassword" autocomplete="new-password" required minlength="8" placeholder="${T('newPass')}">
+        </div>
+        <div class="login-error" id="err"></div>
+        <button class="btn-login" type="submit">${T('recoverBtn')}</button>
+      </form>
+      <p class="link" style="text-align:center;margin-top:14px"><a href="#/login">${T('backToLogin')}</a></p>
+    </div>
+  </div>`;
+  $('#lang-btn').onclick = () => {
+    appLang = appLang === 'es' ? 'en' : 'es';
+    localStorage.setItem('genloria-lang', appLang);
+    viewRecover();
+  };
   $('#f-recover').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -175,7 +269,7 @@ function viewRecover() {
       toast('¡Clave actualizada! Ahora entra con tu correo 🎉');
       location.hash = '#/login';
     } catch (err) {
-      const el = $('#err'); el.textContent = err.message; el.classList.remove('hidden');
+      $('#err').textContent = err.message;
     }
   });
 }
@@ -183,26 +277,42 @@ function viewRecover() {
 function viewRegister() {
   setNav(null);
   app.innerHTML = `
-    ${topbar('GENLORIA')}
-    <div class="form-wrap">
-      <h1>Crear cuenta</h1>
-      <p class="sub">Necesitas el código de invitación familiar</p>
-      <div class="card">
-        <form id="f-reg">
-          <label>Nombre completo</label>
-          <input type="text" name="name" required maxlength="60" placeholder="Ej: María Pérez">
-          <label>Correo electrónico</label>
-          <input type="email" name="email" required maxlength="120" placeholder="tucorreo@ejemplo.com">
-          <label>Contraseña (mín. 8 caracteres)</label>
-          <input type="password" name="password" autocomplete="new-password" required minlength="8">
-          <label>Código de invitación</label>
-          <input type="text" name="inviteCode" required placeholder="Ej: FAMILIA-2026" style="text-transform:uppercase">
-          <div class="error hidden" id="err"></div>
-          <button class="btn" type="submit">Crear mi cuenta</button>
-        </form>
-      </div>
-      <p class="link">¿Ya tienes cuenta? <a href="#/login">Entrar</a></p>
-    </div>`;
+  <div class="login-page">
+    <header class="login-header">
+      <div class="login-brand"><img src="/icons/icon-192.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
+      <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
+    </header>
+    <div class="login-card" style="margin-top:24px">
+      <h2>👥 ${T('registerTitle')}</h2>
+      <p class="sub">${T('registerSub')}</p>
+      <form id="f-reg">
+        <div class="login-field">
+          <span class="fi">👤</span>
+          <input type="text" name="name" required maxlength="60" placeholder="${T('fullName')}">
+        </div>
+        <div class="login-field">
+          <span class="fi">✉️</span>
+          <input type="email" name="email" required maxlength="120" placeholder="${T('email')}">
+        </div>
+        <div class="login-field">
+          <span class="fi">🔒</span>
+          <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="${T('password')} (mín. 8)">
+        </div>
+        <div class="login-field">
+          <span class="fi">🎫</span>
+          <input type="text" name="inviteCode" required placeholder="${T('inviteCode')}" style="text-transform:uppercase">
+        </div>
+        <div class="login-error" id="err"></div>
+        <button class="btn-login" type="submit">${T('createBtn')}</button>
+      </form>
+      <p class="link" style="text-align:center;margin-top:14px"><a href="#/login">${T('hasAccount')}</a></p>
+    </div>
+  </div>`;
+  $('#lang-btn').onclick = () => {
+    appLang = appLang === 'es' ? 'en' : 'es';
+    localStorage.setItem('genloria-lang', appLang);
+    viewRegister();
+  };
   $('#f-reg').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -218,7 +328,7 @@ function viewRegister() {
       toast('¡Bienvenido a la familia! 🎉');
       location.hash = '#/feed';
     } catch (err) {
-      const el = $('#err'); el.textContent = err.message; el.classList.remove('hidden');
+      $('#err').textContent = err.message;
     }
   });
 }

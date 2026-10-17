@@ -1,8 +1,9 @@
 // service-worker.js — PWA: app shell offline, API siempre a la red.
-const CACHE = 'genloria-v5';
+const CACHE = 'genloria-v6';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/tree.js', '/manifest.json',
-  '/icons/icon-192.png', '/icons/icon-512.png', '/icons/avatar-default.svg'
+  '/icons/icon-192.png', '/icons/icon-512.png', '/icons/avatar-default.svg',
+  '/images/login-hero.jpg'
 ];
 
 self.addEventListener('install', (event) => {

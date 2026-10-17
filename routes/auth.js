@@ -134,6 +134,13 @@ router.post('/login', authLimiter, (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password_hash))
     return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
   req.session.userId = user.id;
+  // "Mantener sesión iniciada": 30 días; si no, la cookie expira al cerrar el navegador
+  if (req.body && req.body.remember === false) {
+    req.session.cookie.maxAge = null;
+    req.session.cookie.expires = false;
+  } else {
+    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+  }
   res.json({ user: publicUser(user) });
 });
 
