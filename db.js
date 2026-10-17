@@ -100,12 +100,41 @@ CREATE TABLE IF NOT EXISTS tree_suggestions (
 );
 `);
 
-// Migración: detalles personales para el árbol genealógico / perfil + correo
-for (const col of ['birthdate', 'phone', 'email']) {
+// Migración: ficha genealógica completa (persona) — datos básicos + apodo,
+// lugares, bautismo, fallecimiento, ocupación, educación, religión,
+// nacionalidad, residencia, servicio militar, notas y fuentes.
+for (const col of [
+  'birthdate', 'phone', 'email',
+  'nickname', 'maiden_name', 'sex',
+  'birth_place', 'baptism_date', 'baptism_place',
+  'death_date', 'death_place', 'death_cause', 'burial_place',
+  'occupation', 'education', 'religion', 'nationality', 'residence',
+  'military_service', 'notes'
+]) {
   const exists = db.prepare('PRAGMA table_info(users)').all().some(c => c.name === col);
-  if (!exists) db.prepare(`ALTER TABLE users ADD COLUMN ${col} TEXT`).run();
+  if (!exists) db.prepare(`ALTER TABLE users ADD COLUMN ${col} TEXT DEFAULT ''`).run();
+}
+if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'is_deceased')) {
+  db.prepare('ALTER TABLE users ADD COLUMN is_deceased INTEGER NOT NULL DEFAULT 0').run();
+}
+// Familiar sin cuenta: persona del árbol que no inicia sesión (ej. antepasado fallecido).
+// El admin la crea y mantiene; no puede autenticarse.
+if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'is_placeholder')) {
+  db.prepare('ALTER TABLE users ADD COLUMN is_placeholder INTEGER NOT NULL DEFAULT 0').run();
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+// Migración: tipo de vínculo en parent_links (biológico/adoptivo/acogida) y
+// segundo juego de padres; fecha/lugar de matrimonio en couples.
+for (const [tbl, col, def] of [
+  ['parent_links', 'link_type', "TEXT NOT NULL DEFAULT 'biologico'"],
+  ['parent_links', 'link_set', 'INTEGER NOT NULL DEFAULT 1'],
+  ['couples', 'marriage_date', 'TEXT'],
+  ['couples', 'marriage_place', 'TEXT'],
+  ['couples', 'status', "TEXT NOT NULL DEFAULT 'actual'"]
+]) {
+  const exists = db.prepare(`PRAGMA table_info(${tbl})`).all().some(c => c.name === col);
+  if (!exists) db.prepare(`ALTER TABLE ${tbl} ADD COLUMN ${col} ${def}`).run();
+}
 
 // Códigos de recuperación de clave (un solo uso, con vencimiento).
 // El admin genera el código y lo comparte; el familiar elige su propia clave.

@@ -54,6 +54,7 @@ app.use('/api/auth', require('./routes/auth').router);
 app.use('/api/posts', require('./routes/feed'));
 app.use('/api/stories', require('./routes/stories'));
 app.use('/api/tree', require('./routes/tree'));
+app.use('/api/export', require('./routes/export'));
 app.use('/api/users', require('./routes/users'));
 
 // Manejo de errores de subida

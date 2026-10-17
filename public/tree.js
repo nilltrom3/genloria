@@ -139,7 +139,7 @@ function renderTreeSVG(layout) {
       const [a, b] = un.members, key = a < b ? a + '-' + b : b + '-' + a;
       if (drawnCouples.has(key)) return;
       drawnCouples.add(key);
-      s += `<line x1="${pos[a].x}" y1="${pos[a].y}" x2="${pos[b].x}" y2="${pos[b].y}" stroke="#4f46e5" stroke-width="3"/>`;
+      s += `<line x1="${pos[a].x}" y1="${pos[a].y}" x2="${pos[b].x}" y2="${pos[b].y}" stroke="#d4af37" stroke-width="3"/>`;
     }
   });
 
@@ -163,7 +163,7 @@ function renderTreeSVG(layout) {
       drawnChild.add(kid);
       const cx = pos[kid].x, topY = famY + R + 4, botY = pos[kid].y - R - 16;
       const midY = (topY + botY) / 2;
-      s += `<path d="M ${famX} ${topY} V ${midY} H ${cx} V ${botY}" fill="none" stroke="#9ca3af" stroke-width="2"/>`;
+      s += `<path d="M ${famX} ${topY} V ${midY} H ${cx} V ${botY}" fill="none" stroke="#5b7ba6" stroke-width="2"/>`;
     });
   });
 
@@ -173,14 +173,17 @@ function renderTreeSVG(layout) {
     const av = u.avatar_path ? u.avatar_path : null;
     const words = u.name.split(/\s+/);
     const line1 = words.slice(0, 2).join(' ');
-    const line2 = words.slice(2, 4).join(' ');
+    const by = (u.birthdate || '').slice(0, 4);
+    const dy = u.is_deceased && u.death_date ? u.death_date.slice(0, 4) : '';
+    const line2 = u.is_deceased && (by || dy) ? `✝ ${by || '…'}–${dy || '…'}` : (by || words.slice(2, 4).join(' '));
+    const ring = u.is_deceased ? '#6b7280' : '#43a047';
     s += `<g class="tnode" data-uid="${u.id}" transform="translate(${p.x},${p.y})" style="cursor:pointer">`;
-    s += `<circle r="${R + 3}" fill="#fff" stroke="#4f46e5" stroke-width="${cpl[u.id] ? 2.5 : 0}"/>`;
-    s += `<circle r="${R}" fill="#dbe1f0"/>`;
-    s += `<text y="6" text-anchor="middle" font-size="20" fill="#4f46e5" font-weight="700">${esc(initials(u.name))}</text>`;
+    s += `<circle r="${R + 3}" fill="#14253d" stroke="${ring}" stroke-width="${cpl[u.id] ? 2.5 : 0}"/>`;
+    s += `<circle r="${R}" fill="#1e3a5f"/>`;
+    s += `<text y="6" text-anchor="middle" font-size="20" fill="#7fb3ec" font-weight="700">${esc(initials(u.name))}</text>`;
     if (av) s += `<image href="${esc(av)}" x="${-R}" y="${-R}" width="${R * 2}" height="${R * 2}" clip-path="url(#tclip)" onerror="this.remove()"/>`;
-    s += `<text y="${R + 18}" text-anchor="middle" font-size="11" fill="#1f2937" font-weight="600">${esc(line1)}</text>`;
-    if (line2) s += `<text y="${R + 31}" text-anchor="middle" font-size="11" fill="#1f2937">${esc(line2)}</text>`;
+    s += `<text y="${R + 18}" text-anchor="middle" font-size="11" fill="#f1f5f9" font-weight="600">${esc(line1)}</text>`;
+    if (line2) s += `<text y="${R + 31}" text-anchor="middle" font-size="11" fill="#8fa3bf">${esc(line2)}</text>`;
     s += `</g>`;
   });
 

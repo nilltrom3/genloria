@@ -14,8 +14,42 @@ const authLimiter = rateLimit({
   message: { error: 'Demasiados intentos. Espera unos minutos.' }
 });
 
+// Campos de la ficha genealógica (persona)
+const PERSON_FIELDS = ['nickname', 'maiden_name', 'sex', 'birth_place',
+  'baptism_date', 'baptism_place', 'death_date', 'death_place', 'death_cause', 'burial_place',
+  'occupation', 'education', 'religion', 'nationality', 'residence',
+  'military_service', 'notes'];
+
 function publicUser(u) {
-  return { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null };
+  const p = { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null, is_deceased: !!u.is_deceased, is_placeholder: !!u.is_placeholder };
+  for (const f of PERSON_FIELDS) p[f] = u[f] || null;
+  return p;
+}
+
+// Limpia y valida los campos de ficha genealógica del body (para PUT /me y admin)
+function cleanPersonFields(body) {
+  const out = {};
+  const str = (v, n) => (v || '').toString().trim().slice(0, n) || null;
+  const date = v => /^\d{4}-\d{2}-\d{2}$/.test((v || '').toString()) ? v.toString() : null;
+  out.nickname = str(body.nickname, 60);
+  out.maiden_name = str(body.maiden_name, 60);
+  out.sex = str(body.sex, 20);
+  out.birth_place = str(body.birth_place, 120);
+  out.baptism_date = date(body.baptism_date);
+  out.baptism_place = str(body.baptism_place, 120);
+  out.is_deceased = body.is_deceased ? 1 : 0;
+  out.death_date = date(body.death_date);
+  out.death_place = str(body.death_place, 120);
+  out.death_cause = str(body.death_cause, 200);
+  out.burial_place = str(body.burial_place, 160);
+  out.occupation = str(body.occupation, 120);
+  out.education = str(body.education, 120);
+  out.religion = str(body.religion, 60);
+  out.nationality = str(body.nationality, 60);
+  out.residence = str(body.residence, 120);
+  out.military_service = str(body.military_service, 200);
+  out.notes = str(body.notes, 2000);
+  return out;
 }
 
 function validUsername(v) {
@@ -130,4 +164,4 @@ router.get('/me', (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
-module.exports = { router, publicUser, issueRecoveryCode, validEmail };
+module.exports = { router, publicUser, issueRecoveryCode, validEmail, cleanPersonFields, PERSON_FIELDS };

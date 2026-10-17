@@ -98,6 +98,18 @@ router.post('/', requireAuth, upload.single('media'), (req, res) => {
 });
 
 // Borrar publicación (autor o admin)
+// Editar texto de publicación (autor o admin)
+router.put('/:id', requireAuth, (req, res) => {
+  const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
+  if (!post) return res.status(404).json({ error: 'Publicación no encontrada.' });
+  const me = db.prepare('SELECT role FROM users WHERE id = ?').get(req.session.userId);
+  if (post.user_id !== req.session.userId && me.role !== 'admin')
+    return res.status(403).json({ error: 'No tienes permiso.' });
+  const text = (req.body.text || '').toString().trim().slice(0, 2000);
+  db.prepare('UPDATE posts SET text = ? WHERE id = ?').run(text, post.id);
+  res.json({ ok: true });
+});
+
 router.delete('/:id', requireAuth, (req, res) => {
   const post = db.prepare('SELECT * FROM posts WHERE id = ?').get(req.params.id);
   if (!post) return res.status(404).json({ error: 'Publicación no encontrada.' });

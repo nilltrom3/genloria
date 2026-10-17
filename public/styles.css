@@ -1,12 +1,17 @@
 :root {
-  --primary: #0b2b4f;
-  --primary-dark: #081f3a;
-  --bg: #f3f4f8;
-  --card: #ffffff;
-  --text: #1f2937;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --danger: #dc2626;
+  color-scheme: dark;
+  --primary: #2b7cd3;
+  --primary-dark: #1f63b0;
+  --navy: #0b2b4f;
+  --bg: #0a1628;
+  --card: #14253d;
+  --field: #0e1d33;
+  --text: #f1f5f9;
+  --muted: #8fa3bf;
+  --border: #243b5c;
+  --gold: #d4af37;
+  --green: #43a047;
+  --danger: #ef5350;
   --radius: 14px;
   --nav-h: 64px;
 }
@@ -46,12 +51,13 @@ body {
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
 label { display: block; font-size: .85rem; font-weight: 600; margin: 12px 0 4px; }
-input[type=text], input[type=password], textarea {
+input[type=text], input[type=password], input[type=email], input[type=tel], input[type=date], input[type=number], select, textarea {
   width: 100%; padding: 12px; font-size: 1rem;
   border: 1.5px solid var(--border); border-radius: 10px;
-  font-family: inherit; background: #fff;
+  font-family: inherit; background: var(--field); color: var(--text);
 }
-input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .7; }
 textarea { min-height: 110px; resize: vertical; }
 .btn {
   display: block; width: 100%; padding: 14px; margin-top: 16px;
@@ -59,7 +65,7 @@ textarea { min-height: 110px; resize: vertical; }
   font-size: 1.05rem; font-weight: 700; cursor: pointer;
 }
 .btn:active { background: var(--primary-dark); }
-.btn.secondary { background: #e5e7eb; color: var(--text); }
+.btn.secondary { background: #22344f; color: var(--text); }
 .btn.danger { background: var(--danger); }
 .link { text-align: center; margin-top: 14px; color: var(--muted); font-size: .95rem; }
 .link a { color: var(--primary); font-weight: 600; }
@@ -81,7 +87,7 @@ textarea { min-height: 110px; resize: vertical; }
 }
 .story-thumb img {
   width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
-  border: 2.5px solid #fff; display: block; background: #ddd;
+  border: 2.5px solid var(--card); display: block; background: #22344f;
 }
 .story-thumb .sname { font-size: .7rem; margin-top: 4px; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 68px; }
@@ -91,7 +97,7 @@ textarea { min-height: 110px; resize: vertical; }
 .post { background: var(--card); border-radius: var(--radius); margin: 12px; overflow: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .post-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
-.avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #dbe1f0; flex: 0 0 auto; }
+.avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #22344f; flex: 0 0 auto; }
 .post-head .who { flex: 1; min-width: 0; }
 .post-head .who b { display: block; font-size: .95rem; }
 .post-head .who small { color: var(--muted); font-size: .78rem; }
@@ -117,7 +123,7 @@ textarea { min-height: 110px; resize: vertical; }
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;
   height: calc(var(--nav-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
-  background: #fff; border-top: 1px solid var(--border);
+  background: var(--card); border-top: 1px solid var(--border);
   display: flex; align-items: stretch; justify-content: space-around;
 }
 #bottomnav button {
@@ -169,14 +175,14 @@ textarea { min-height: 110px; resize: vertical; }
 
 /* Admin */
 .tabs { display: flex; gap: 8px; padding: 12px; }
-.tabs button { flex: 1; padding: 10px; border: 0; border-radius: 10px; background: #e5e7eb; font-weight: 600; }
+.tabs button { flex: 1; padding: 10px; border: 0; border-radius: 10px; background: #22344f; color: var(--text); font-weight: 600; }
 .tabs button.active { background: var(--primary); color: #fff; }
 .row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .row .grow { flex: 1; min-width: 0; }
 .row small { color: var(--muted); display: block; }
-.chip { background: #eef2ff; color: var(--primary); border-radius: 20px; padding: 4px 10px; font-size: .75rem; font-weight: 700; }
-.mini-btn { background: #e5e7eb; border: 0; border-radius: 8px; padding: 8px 12px; font-size: .85rem; font-weight: 600; }
-.mini-btn.danger { background: #fee2e2; color: var(--danger); }
+.chip { background: rgba(43,124,211,.18); color: #7fb3ec; border-radius: 20px; padding: 4px 10px; font-size: .75rem; font-weight: 700; }
+.mini-btn { background: #22344f; color: var(--text); border: 0; border-radius: 8px; padding: 8px 12px; font-size: .85rem; font-weight: 600; }
+.mini-btn.danger { background: rgba(239,83,80,.15); color: var(--danger); }
 
 /* Varios */
 #toast {
@@ -195,10 +201,10 @@ input[type=file] { display: none; }
 
 /* Árbol genealógico */
 .tree-wrap { position: relative; }
-.tree-scroll { overflow: auto; background: #fff; border-radius: var(--radius); margin: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08); max-height: 62vh; }
+.tree-scroll { overflow: auto; background: var(--bg); border-radius: var(--radius); margin: 12px;
+  border: 1px solid var(--border); max-height: 62vh; }
 .tree-zoom { position: sticky; top: 0; display: flex; gap: 8px; padding: 10px; z-index: 5;
-  background: rgba(255,255,255,.9); }
+  background: rgba(10,22,40,.92); }
 .tree-zoom button { background: var(--primary); color: #fff; border: 0; border-radius: 8px;
   padding: 8px 14px; font-size: 1rem; font-weight: 700; }
 .tnode text { pointer-events: none; font-family: inherit; }
@@ -213,7 +219,8 @@ input[type=file] { display: none; }
 /* Hoja inferior (sheet) */
 #sheet { position: fixed; inset: 0; z-index: 55; background: rgba(0,0,0,.45);
   display: flex; align-items: flex-end; justify-content: center; }
-.sheet-body { background: #fff; border-radius: 20px 20px 0 0; padding: 20px; width: 100%;
-  max-width: 620px; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.sheet-body { background: var(--card); border-radius: 20px 20px 0 0; padding: 20px; width: 100%;
+  max-width: 620px; padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  max-height: 92vh; max-height: 92dvh; overflow-y: auto; }
 .sheet-body .who { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .sheet-body .who .avatar { width: 56px; height: 56px; }

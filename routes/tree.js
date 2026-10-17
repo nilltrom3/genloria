@@ -34,45 +34,62 @@ function ancestorsOf(id) {
   return seen;
 }
 
-function addParentLink(parentId, childId) {
+function addParentLink(parentId, childId, linkType, linkSet) {
   parentId = parseInt(parentId, 10); childId = parseInt(childId, 10);
+  linkType = ['biologico', 'adoptivo', 'acogida'].includes(linkType) ? linkType : 'biologico';
+  linkSet = linkSet === 2 ? 2 : 1;
   if (!userExists(parentId) || !userExists(childId)) return 'Una de las personas no existe.';
   if (parentId === childId) return 'Una persona no puede ser su propio padre/madre.';
   if (db.prepare('SELECT 1 FROM parent_links WHERE parent_id = ? AND child_id = ?').get(parentId, childId))
     return 'Esa relación ya está registrada.';
   if (ancestorsOf(parentId).has(childId)) return 'Eso crearía un ciclo en el árbol.';
-  db.prepare('INSERT INTO parent_links (parent_id, child_id) VALUES (?,?)').run(parentId, childId);
+  db.prepare('INSERT INTO parent_links (parent_id, child_id, link_type, link_set) VALUES (?,?,?,?)')
+    .run(parentId, childId, linkType, linkSet);
   return null;
 }
 
-function addCouple(a, b) {
+function addCouple(a, b, opts) {
   a = parseInt(a, 10); b = parseInt(b, 10);
+  opts = opts || {};
+  const status = opts.status === 'anterior' ? 'anterior' : 'actual';
   if (!userExists(a) || !userExists(b)) return 'Una de las personas no existe.';
   if (a === b) return 'Debe ser otra persona.';
   const [u1, u2] = a < b ? [a, b] : [b, a];
   if (db.prepare('SELECT 1 FROM couples WHERE user1_id = ? AND user2_id = ?').get(u1, u2))
     return 'Esa pareja ya está registrada.';
-  const busy = db.prepare('SELECT 1 FROM couples WHERE user1_id = ? OR user2_id = ? OR user1_id = ? OR user2_id = ?')
-    .get(a, a, b, b);
-  if (busy) return 'Una de esas personas ya tiene pareja registrada.';
-  db.prepare('INSERT INTO couples (user1_id, user2_id) VALUES (?,?)').run(u1, u2);
+  if (status === 'actual') {
+    const busy = db.prepare(`SELECT 1 FROM couples
+      WHERE status = 'actual' AND (user1_id = ? OR user2_id = ? OR user1_id = ? OR user2_id = ?)`)
+      .get(a, a, b, b);
+    if (busy) return 'Una de esas personas ya tiene pareja actual registrada.';
+  }
+  const md = /^\d{4}-\d{2}-\d{2}$/.test(opts.marriage_date || '') ? opts.marriage_date : null;
+  const mp = (opts.marriage_place || '').toString().trim().slice(0, 120) || null;
+  db.prepare('INSERT INTO couples (user1_id, user2_id, marriage_date, marriage_place, status) VALUES (?,?,?,?,?)')
+    .run(u1, u2, md, mp, status);
   return null;
 }
 
 // ---- Lectura: todo el árbol (cualquier miembro) ----
 router.get('/', requireAuth, (req, res) => {
-  const users = db.prepare('SELECT id, username, name, avatar_path FROM users ORDER BY name').all();
-  const pl = db.prepare('SELECT parent_id, child_id FROM parent_links').all();
-  const parents = {};
-  for (const r of pl) { (parents[r.child_id] = parents[r.child_id] || []).push(r.parent_id); }
-  const couples = db.prepare('SELECT user1_id, user2_id FROM couples').all()
-    .map(r => [r.user1_id, r.user2_id]);
-  res.json({ users, parents, couples });
+  const users = db.prepare(`SELECT id, username, name, avatar_path, birthdate, is_deceased,
+    death_date, is_placeholder FROM users ORDER BY name`).all();
+  const pl = db.prepare('SELECT parent_id, child_id, link_type, link_set FROM parent_links').all();
+  const parents = {}, parentMeta = {};
+  for (const r of pl) {
+    (parents[r.child_id] = parents[r.child_id] || []).push(r.parent_id);
+    parentMeta[`${r.parent_id}:${r.child_id}`] = { link_type: r.link_type, link_set: r.link_set };
+  }
+  const couples = db.prepare('SELECT user1_id, user2_id, marriage_date, marriage_place, status FROM couples').all();
+  const couplePairs = couples.map(r => [r.user1_id, r.user2_id]);
+  const coupleMeta = {};
+  for (const r of couples) coupleMeta[`${r.user1_id}:${r.user2_id}`] = { marriage_date: r.marriage_date, marriage_place: r.marriage_place, status: r.status };
+  res.json({ users, parents, parentMeta, couples: couplePairs, coupleMeta });
 });
 
 // ---- Gestión (admin) ----
 router.post('/parents', requireAuth, requireAdmin, (req, res) => {
-  const err = addParentLink(req.body.parentId, req.body.childId);
+  const err = addParentLink(req.body.parentId, req.body.childId, req.body.link_type, req.body.link_set);
   if (err) return res.status(400).json({ error: err });
   res.status(201).json({ ok: true });
 });
@@ -84,7 +101,9 @@ router.delete('/parents', requireAuth, requireAdmin, (req, res) => {
 });
 
 router.post('/couples', requireAuth, requireAdmin, (req, res) => {
-  const err = addCouple(req.body.user1Id, req.body.user2Id);
+  const err = addCouple(req.body.user1Id, req.body.user2Id, {
+    marriage_date: req.body.marriage_date, marriage_place: req.body.marriage_place, status: req.body.status
+  });
   if (err) return res.status(400).json({ error: err });
   res.status(201).json({ ok: true });
 });
@@ -156,3 +175,5 @@ router.post('/suggestions/:id/reject', requireAuth, requireAdmin, (req, res) => 
 });
 
 module.exports = router;
+module.exports.addParentLink = addParentLink;
+module.exports.addCouple = addCouple;

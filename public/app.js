@@ -20,6 +20,16 @@ function fmtDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
+function fmtDateTime(iso) {
+  const d = new Date((iso || '').replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return iso || '';
+  const fecha = d.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ap = h >= 12 ? 'p. m.' : 'a. m.';
+  h = h % 12 || 12;
+  return `${fecha} · ${h}:${m} ${ap}`;
+}
 
 function timeAgo(iso) {
   const d = new Date(iso.replace(' ', 'T') + 'Z');
@@ -81,6 +91,7 @@ function setNav(active) {
       (active === 'feed' && target === '#/feed') ||
       (active === 'tree' && target === '#/tree') ||
       (active === 'new' && target === '#/new') ||
+      (active === 'family' && target === '#/family') ||
       (active === 'profile' && target === '#/profile')
     ));
   });
@@ -249,8 +260,8 @@ function postCardHTML(p) {
   return `<article class="post" data-post="${p.id}">
     <div class="post-head">
       ${avatarHTML(p.author)}
-      <div class="who"><b>${esc(p.author.name)}</b><small>@${esc(p.author.username)} · ${timeAgo(p.created_at)}</small></div>
-      ${canDelete ? `<button class="del" data-del="${p.id}" aria-label="Borrar">🗑</button>` : ''}
+      <div class="who"><b>${esc(p.author.name)}</b><small>${timeAgo(p.created_at)} · ${fmtDateTime(p.created_at)}</small></div>
+      ${canDelete ? `<button class="del" data-postmenu="${p.id}" aria-label="Opciones">⋯</button>` : ''}
     </div>
     ${p.text ? `<div class="post-text">${esc(p.text)}</div>` : ''}
     ${mediaHTML(p)}
@@ -340,14 +351,42 @@ function renderFeed() {
       } catch (err) { toast(err.message); }
       return;
     }
-    const delBtn = e.target.closest('[data-del]');
-    if (delBtn) {
-      if (!confirm('¿Borrar esta publicación?')) return;
-      try {
-        await api(`/api/posts/${delBtn.dataset.del}`, { method: 'DELETE' });
-        feedCache = feedCache.filter(x => x.id != delBtn.dataset.del);
-        renderFeed();
-      } catch (err) { toast(err.message); }
+    const menuBtn = e.target.closest('[data-postmenu]');
+    if (menuBtn) {
+      const pid = menuBtn.dataset.postmenu;
+      const post = feedCache.find(x => x.id == pid);
+      openSheet(`
+        <div class="menu-list" style="margin:0">
+          <button id="pm-edit">✏️ Editar publicación</button>
+          <button id="pm-del" style="color:var(--danger)">🗑 Eliminar publicación</button>
+          <button id="pm-cancel">Cancelar</button>
+        </div>`);
+      $('#pm-cancel').onclick = closeSheet;
+      $('#pm-del').onclick = async () => {
+        closeSheet();
+        if (!confirm('¿Borrar esta publicación?')) return;
+        try {
+          await api(`/api/posts/${pid}`, { method: 'DELETE' });
+          feedCache = feedCache.filter(x => x.id != pid);
+          renderFeed();
+        } catch (err) { toast(err.message); }
+      };
+      $('#pm-edit').onclick = () => {
+        closeSheet();
+        openSheet(`
+          <h3 style="margin-top:0">Editar publicación</h3>
+          <textarea id="pm-text" style="min-height:120px">${esc(post ? post.text : '')}</textarea>
+          <button class="btn" id="pm-save">Guardar cambios</button>
+          <button class="btn secondary" id="pm-cancel2">Cancelar</button>`);
+        $('#pm-cancel2').onclick = closeSheet;
+        $('#pm-save').onclick = async () => {
+          try {
+            await api(`/api/posts/${pid}`, { method: 'PUT', body: JSON.stringify({ text: $('#pm-text').value }) });
+            closeSheet(); toast('Publicación actualizada ✅'); loadFeed();
+          } catch (err) { toast(err.message); }
+        };
+      };
+      return;
     }
   });
 }
@@ -454,93 +493,48 @@ async function viewProfile(username) {
   try {
     const { user, postCount } = await api(`/api/users/${encodeURIComponent(uname)}`);
     const isMine = me && user.id === me.id;
-    // Detalles familiares desde el árbol genealógico
-    let familyHTML = '';
-    const t = await api('/api/tree').catch(() => null);
-    if (t) {
-      const byId = Object.fromEntries(t.users.map(u => [u.id, u]));
-      const parents = (t.parents[user.id] || []).map(id => byId[id]).filter(Boolean);
-      const children = Object.entries(t.parents)
-        .filter(([cid, pids]) => pids.includes(user.id))
-        .map(([cid]) => byId[cid]).filter(Boolean);
-      const pair = (t.couples || []).find(([a, b]) => a === user.id || b === user.id);
-      const partner = pair ? byId[pair[0] === user.id ? pair[1] : pair[0]] : null;
-      const isAdmin = me && me.role === 'admin';
+    // Ficha genealógica (resumen) + botón para ver/editar la ficha completa
+    let fichaHTML = '';
+    {
       const rows = [];
-      if (partner) rows.push(['💑 Pareja', partner.name, `delc:${pair[0]}:${pair[1]}`]);
-      parents.forEach(p => rows.push(['👪 Padre/Madre', p.name, `delp:${p.id}:${user.id}`]));
-      children.forEach(c => rows.push(['🧒 Hijo/a', c.name, `delp:${user.id}:${c.id}`]));
-      familyHTML = `<div class="card"><h3 style="margin-top:0">👨‍👩‍👧 Familia</h3>`;
-      familyHTML += rows.length
-        ? rows.map(([k, v, del]) => `<p style="margin:6px 0"><strong>${k}:</strong> ${esc(v)}${isAdmin ? ` <button class="mini-btn danger" data-famdel="${del}" style="padding:2px 10px">✕</button>` : ''}</p>`).join('')
-        : `<p style="color:var(--muted)">Sin relaciones registradas.</p>`;
-      if (isAdmin) {
-        const opts = t.users.filter(u => u.id !== user.id)
-          .map(u => `<option value="${u.id}">${esc(u.name)} (@${esc(u.username)})</option>`).join('');
-        familyHTML += `
-          <form id="f-famparent" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-            <select name="parentId" style="flex:1;min-width:130px;padding:10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">Padre/madre…</option>${opts}</select>
-            <button class="mini-btn" type="submit">Añadir</button>
-          </form>
-          ${!partner ? `<form id="f-fampartner" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <select name="partnerId" style="flex:1;min-width:130px;padding:10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">Pareja…</option>${opts}</select>
-            <button class="mini-btn" type="submit">Añadir</button>
-          </form>` : ''}`;
-      } else {
-        familyHTML += `<button class="mini-btn" data-go="#/tree/suggest?uid=${user.id}" style="margin-top:8px">Proponer parentesco</button>`;
+      const kv = (k, v) => { if (v) rows.push(`<p style="margin:6px 0"><strong>${k}:</strong> ${v}</p>`); };
+      if (user.nickname) kv('Apodo', `«${esc(user.nickname)}»`);
+      kv('Nacimiento', [user.birthdate ? fmtDate(user.birthdate) : '', user.birth_place ? esc(user.birth_place) : ''].filter(Boolean).join(' — '));
+      if (user.is_deceased) {
+        kv('Fallecimiento', [user.death_date ? fmtDate(user.death_date) : '', user.death_place ? esc(user.death_place) : ''].filter(Boolean).join(' — '));
       }
-      familyHTML += `</div>`;
+      if (user.phone) kv('Teléfono', esc(user.phone));
+      if (user.occupation) kv('Ocupación', esc(user.occupation));
+      if (user.residence) kv('Residencia', esc(user.residence));
+      fichaHTML = `<div class="card"><h3 style="margin-top:0">📋 Ficha genealógica</h3>
+        ${rows.length ? rows.join('') : '<p style="color:var(--muted)">Sin datos registrados.</p>'}
+        <button class="mini-btn" id="btn-ficha" style="margin-top:8px">Ver ficha completa</button>
+      </div>`;
     }
-    const det = [];
-    if (user.birthdate) det.push(`<p style="margin:6px 0">🎂 <strong>Nació:</strong> ${esc(fmtDate(user.birthdate))}</p>`);
-    if (user.phone) det.push(`<p style="margin:6px 0">📞 <strong>Teléfono:</strong> ${esc(user.phone)}</p>`);
-    const detailsHTML = det.length ? `<div class="card"><h3 style="margin-top:0">📋 Detalles</h3>${det.join('')}</div>` : '';
+    const exportHTML = isMine ? `<div class="card"><h3 style="margin-top:0">⬇️ Descargar datos familiares</h3>
+      <p style="color:var(--muted);font-size:.9rem;margin-top:0">El PDF trae la portada, los datos por generación y el árbol. El GEDCOM sirve para otros programas de genealogía.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="mini-btn" href="/api/export/family.pdf" style="text-decoration:none" download>📄 PDF familiar</a>
+        <a class="mini-btn" href="/api/export/family.gedcom" style="text-decoration:none" download>🌳 GEDCOM</a>
+      </div></div>` : '';
     app.innerHTML = `
       ${topbar('Perfil')}
       <div class="profile-head">
         ${avatarHTML(user)}
-        <h2>${esc(user.name)}</h2>
-        <p class="uname">@${esc(user.username)} ${user.role === 'admin' ? '<span class="chip">ADMIN</span>' : ''}</p>
+        <h2>${esc(user.name)}${user.is_deceased ? ' ✝' : ''}</h2>
+        <p class="uname">${user.is_placeholder ? '<span class="chip">SOLO ÁRBOL</span>' : `@${esc(user.username)}`} ${user.role === 'admin' ? '<span class="chip">ADMIN</span>' : ''}</p>
         ${user.bio ? `<p class="bio">${esc(user.bio)}</p>` : ''}
-        <p class="uname">${postCount} publicaciones</p>
+        ${user.is_placeholder ? '' : `<p class="uname">${postCount} publicaciones</p>`}
       </div>
-      ${detailsHTML}
-      ${familyHTML}
+      ${fichaHTML}
+      ${exportHTML}
       <div class="menu-list">
         ${isMine ? `<button data-go="#/settings">✏️ Editar mi perfil</button>` : ''}
         ${me && me.role === 'admin' ? `<button data-go="#/admin">🛠 Administración</button>` : ''}
         ${isMine ? `<button data-logout style="color:var(--danger)">🚪 Cerrar sesión</button>` : ''}
       </div>`;
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
-    const fp = $('#f-famparent');
-    if (fp) fp.addEventListener('submit', async e => {
-      e.preventDefault();
-      const pid = parseInt(new FormData(e.target).get('parentId'), 10);
-      if (!pid) return;
-      try {
-        await api('/api/tree/parents', { method: 'POST', body: JSON.stringify({ parentId: pid, childId: user.id }) });
-        toast('Parentesco agregado ✅'); viewProfile(username);
-      } catch (err) { toast(err.message); }
-    });
-    const fc = $('#f-fampartner');
-    if (fc) fc.addEventListener('submit', async e => {
-      e.preventDefault();
-      const pid = parseInt(new FormData(e.target).get('partnerId'), 10);
-      if (!pid) return;
-      try {
-        await api('/api/tree/couples', { method: 'POST', body: JSON.stringify({ user1Id: user.id, user2Id: pid }) });
-        toast('Pareja agregada ✅'); viewProfile(username);
-      } catch (err) { toast(err.message); }
-    });
-    $$('#app [data-famdel]').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm('¿Quitar esta relación?')) return;
-      const [kind, a, c] = b.dataset.famdel.split(':');
-      try {
-        if (kind === 'delp') await api('/api/tree/parents', { method: 'DELETE', body: JSON.stringify({ parentId: +a, childId: +c }) });
-        else await api('/api/tree/couples', { method: 'DELETE', body: JSON.stringify({ user1Id: +a, user2Id: +c }) });
-        toast('Relación eliminada ✅'); viewProfile(username);
-      } catch (err) { toast(err.message); }
-    }));
+    $('#btn-ficha').onclick = () => openPersonSheet(user.id, 'view');
     const lo = $('#app [data-logout]');
     if (lo) lo.addEventListener('click', async () => {
       await api('/api/auth/logout', { method: 'POST' });
@@ -572,6 +566,11 @@ function viewSettings() {
       </form>
     </div>
     <div class="card">
+      <h3 style="margin-top:0">📋 Ficha genealógica</h3>
+      <p style="color:var(--muted);font-size:.92rem;margin-top:0">Tus datos de familia: apodo, lugares, bautismo, ocupación, padres, pareja y más.</p>
+      <button class="btn secondary" id="btn-ficha-edit" style="margin-top:0">Abrir mi ficha</button>
+    </div>
+    <div class="card">
       <h3 style="margin-top:0">Cambiar contraseña</h3>
       <form id="f-pass">
         <label>Contraseña actual</label>
@@ -590,6 +589,7 @@ function viewSettings() {
       location.hash = '#/profile';
     } catch (err) { toast(err.message); }
   });
+  $('#btn-ficha-edit').onclick = () => openPersonSheet(me.id, 'edit');
   $('#f-pass').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -616,6 +616,347 @@ function closeSheet() {
   $('#sheet').innerHTML = '';
 }
 
+// ---------- Hoja de familiar (ficha genealógica) ----------
+const LINK_TYPE_LABEL = { biologico: 'Biológico', adoptivo: 'Adoptivo', acogida: 'Acogida' };
+
+function relState(t, uid) {
+  const pm = t.parentMeta || {};
+  const parents1 = [], parents2 = [];
+  for (const pid of (t.parents[uid] || [])) {
+    const m = pm[`${pid}:${uid}`] || {};
+    (m.link_set === 2 ? parents2 : parents1).push({ id: pid, link_type: m.link_type || 'biologico' });
+  }
+  const cm = t.coupleMeta || {};
+  let partner = null;
+  const former = [];
+  for (const [a, b] of (t.couples || [])) {
+    if (a !== uid && b !== uid) continue;
+    const other = a === uid ? b : a;
+    const m = cm[`${Math.min(a, b)}:${Math.max(a, b)}`] || {};
+    if (m.status === 'anterior') former.push(other);
+    else partner = { id: other, marriage_date: m.marriage_date || '', marriage_place: m.marriage_place || '' };
+  }
+  const children = Object.entries(t.parents || {})
+    .filter(([cid, pids]) => pids.includes(uid)).map(([cid]) => +cid);
+  return { parents1, parents2, partner, former, children };
+}
+
+function personOpts(users, excludeId, selected) {
+  return users.filter(u => u.id !== excludeId)
+    .map(u => `<option value="${u.id}"${+u.id === +selected ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+}
+
+const pVal = (person, k) => person ? esc(person[k] || '') : '';
+const pDate = (person, k) => person && person[k] ? person[k].slice(0, 10) : '';
+
+function personFormHTML(person, t, mode) {
+  const isCreate = mode === 'create';
+  const uid = person ? person.id : 0;
+  const r = person ? relState(t, uid) : { parents1: [], parents2: [], partner: null, former: [], children: [] };
+  const p1 = r.parents1[0], p2 = r.parents1[1];
+  const fatherId = p1 ? p1.id : '', motherId = p2 ? p2.id : '';
+  const linkType = (p1 || p2 || {}).link_type || 'biologico';
+  const a1 = r.parents2[0], a2 = r.parents2[1];
+  const partnerId = r.partner ? r.partner.id : '';
+  const others = t.users.filter(u => u.id !== uid);
+  return `
+  <h2 style="margin-top:0">${isCreate ? 'Agregar familiar' : 'Editar familiar'}</h2>
+  <form id="f-person">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <span id="ph-preview">${avatarHTML(person || {}, '')}</span>
+      <label class="file-label" for="ph-photo" style="margin:0;flex:1">📷 ${person && person.avatar_path ? 'Cambiar foto' : 'Agregar foto'}</label>
+      <input type="file" id="ph-photo" name="photo" accept="image/*">
+    </div>
+    <label>Nombre completo</label>
+    <input type="text" name="name" required maxlength="80" value="${pVal(person, 'name')}">
+    <label>Apodo o sobrenombre (opcional)</label>
+    <input type="text" name="nickname" maxlength="60" placeholder="Ej.: «El Flaco», «Tía Mery»…" value="${pVal(person, 'nickname')}">
+    <label>Apellido de soltera / nombre de nacimiento (opcional)</label>
+    <input type="text" name="maiden_name" maxlength="80" placeholder="Ej.: nacida como Rodríguez" value="${pVal(person, 'maiden_name')}">
+    <label>Sexo (opcional, para el registro genealógico)</label>
+    <select name="sex">
+      <option value="">— Sin indicar —</option>
+      <option value="M"${person && person.sex === 'M' ? ' selected' : ''}>Hombre</option>
+      <option value="F"${person && person.sex === 'F' ? ' selected' : ''}>Mujer</option>
+      <option value="X"${person && person.sex === 'X' ? ' selected' : ''}>Otro</option>
+    </select>
+    <label>Fecha de nacimiento</label>
+    <input type="date" name="birthdate" value="${pDate(person, 'birthdate')}">
+    <label>Lugar de nacimiento (opcional)</label>
+    <input type="text" name="birth_place" maxlength="120" placeholder="Ciudad, provincia, país" value="${pVal(person, 'birth_place')}">
+    <label>Fecha de bautismo (opcional)</label>
+    <input type="date" name="baptism_date" value="${pDate(person, 'baptism_date')}">
+    <label>Lugar de bautismo (opcional)</label>
+    <input type="text" name="baptism_place" maxlength="120" placeholder="Parroquia o iglesia, ciudad" value="${pVal(person, 'baptism_place')}">
+    <p class="sub" style="text-align:left">El bautismo se registra como evento aparte: si no se conoce la fecha de nacimiento, sirve como fecha aproximada sin mezclarla con el nacimiento.</p>
+    <label style="display:flex;align-items:center;gap:8px;font-size:1rem">
+      <input type="checkbox" name="is_deceased" value="1"${person && person.is_deceased ? ' checked' : ''} style="width:auto"> Esta persona ya falleció
+    </label>
+    <div id="ph-death" style="${person && person.is_deceased ? '' : 'display:none'}">
+      <label>Fecha de fallecimiento</label>
+      <input type="date" name="death_date" value="${pDate(person, 'death_date')}">
+      <label>Lugar de fallecimiento (opcional)</label>
+      <input type="text" name="death_place" maxlength="120" value="${pVal(person, 'death_place')}">
+      <label>Causa de fallecimiento (opcional)</label>
+      <input type="text" name="death_cause" maxlength="200" value="${pVal(person, 'death_cause')}">
+      <label>Lugar de entierro (opcional)</label>
+      <input type="text" name="burial_place" maxlength="160" value="${pVal(person, 'burial_place')}">
+    </div>
+    <label>Teléfono</label>
+    <input type="tel" name="phone" maxlength="30" placeholder="Ej.: 215-555-0134" value="${pVal(person, 'phone')}">
+    <label>Sobre esta persona (opcional)</label>
+    <textarea name="bio" maxlength="300" style="min-height:70px" placeholder="Una frase que la describa…">${pVal(person, 'bio')}</textarea>
+    <label>Ocupación (opcional)</label>
+    <input type="text" name="occupation" maxlength="120" placeholder="Ej.: maestra, carpintero, comerciante…" value="${pVal(person, 'occupation')}">
+    <label>Educación (opcional)</label>
+    <input type="text" name="education" maxlength="160" placeholder="Estudios, títulos, graduación" value="${pVal(person, 'education')}">
+    <label>Religión (opcional)</label>
+    <input type="text" name="religion" maxlength="80" value="${pVal(person, 'religion')}">
+    <label>Nacionalidad / origen (opcional)</label>
+    <input type="text" name="nationality" maxlength="80" value="${pVal(person, 'nationality')}">
+    <label>Residencia (opcional)</label>
+    <input type="text" name="residence" maxlength="160" placeholder="Dónde vivió la mayor parte de su vida" value="${pVal(person, 'residence')}">
+    <label>Servicio militar (opcional)</label>
+    <input type="text" name="military_service" maxlength="200" placeholder="Rama, años, condecoraciones…" value="${pVal(person, 'military_service')}">
+    <label>Notas y fuentes (opcional)</label>
+    <textarea name="notes" maxlength="2000" style="min-height:70px" placeholder="De dónde salieron los datos: acta de nacimiento, censo, entrevista con…">${pVal(person, 'notes')}</textarea>
+    <p class="sub" style="text-align:left">En genealogía, cada dato debería poder respaldarse con una fuente. Lo que no se conozca se deja en blanco: nunca se inventan datos.</p>
+    <h3 style="margin:18px 0 4px">👪 Padres</h3>
+    <label>Padre</label>
+    <select name="father_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, fatherId)}</select>
+    <label>Madre</label>
+    <select name="mother_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, motherId)}</select>
+    <label>Vínculo con los padres</label>
+    <select name="link_type">
+      <option value="biologico"${linkType === 'biologico' ? ' selected' : ''}>Biológico</option>
+      <option value="adoptivo"${linkType === 'adoptivo' ? ' selected' : ''}>Adoptivo</option>
+      <option value="acogida"${linkType === 'acogida' ? ' selected' : ''}>Acogida</option>
+    </select>
+    <p class="sub" style="text-align:left">Los vínculos adoptivos o de acogida se dibujan con línea punteada en el árbol.</p>
+    <fieldset style="border:1.5px solid var(--border);border-radius:10px;padding:12px;margin-top:12px">
+      <legend style="padding:0 8px;font-weight:700">Segundo juego de padres (opcional)</legend>
+      <p class="sub" style="text-align:left;margin-top:0">Una persona puede tener dos juegos de padres registrados a la vez —por ejemplo, los biológicos y los adoptivos—, como permiten el estándar GEDCOM y plataformas como MyHeritage.</p>
+      <label>Tipo de vínculo del segundo juego</label>
+      <select name="alt_link_type">
+        <option value="adoptivo"${((a1 || {}).link_type || 'adoptivo') === 'adoptivo' ? ' selected' : ''}>Adoptivo</option>
+        <option value="acogida"${((a1 || {}).link_type) === 'acogida' ? ' selected' : ''}>Acogida</option>
+      </select>
+      <label>Padre (segundo juego)</label>
+      <select name="alt_father_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, a1 ? a1.id : '')}</select>
+      <label>Madre (segundo juego)</label>
+      <select name="alt_mother_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, a2 ? a2.id : '')}</select>
+    </fieldset>
+    <h3 style="margin:18px 0 4px">💑 Pareja</h3>
+    <label>Pareja actual</label>
+    <select name="partner_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, partnerId)}</select>
+    <label>Fecha de matrimonio (opcional)</label>
+    <input type="date" name="marriage_date" value="${r.partner ? r.partner.marriage_date : ''}">
+    <label>Lugar de matrimonio (opcional)</label>
+    <input type="text" name="marriage_place" maxlength="120" placeholder="Ciudad, iglesia o registro civil" value="${esc(r.partner ? r.partner.marriage_place : '')}">
+    <label>Parejas anteriores</label>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${others.map(u => `<label style="display:flex;align-items:center;gap:8px;font-weight:400;margin:0"><input type="checkbox" name="former_partners" value="${u.id}"${r.former.includes(u.id) ? ' checked' : ''} style="width:auto"> ${esc(u.name)}</label>`).join('')}
+    </div>
+    <p class="sub" style="text-align:left">Los hijos se enlazan solos: al indicar padre o madre en la ficha de cada hijo, aparecerán aquí como hijos.</p>
+    ${isCreate ? `
+    <label style="display:flex;align-items:center;gap:8px;font-size:1rem;margin-top:16px">
+      <input type="checkbox" name="with_account" value="1" style="width:auto"> Crear cuenta de acceso para esta persona
+    </label>
+    <div id="ph-acct" style="display:none">
+      <label>Correo electrónico (para su cuenta)</label>
+      <input type="email" name="email" maxlength="120" placeholder="Su correo para entrar a GENLORIA">
+      <p class="sub" style="text-align:left">Se generará un código para que elija su propia clave. Sin esto, el familiar solo existe en el árbol.</p>
+    </div>` : ''}
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button type="button" class="btn secondary" id="ph-cancel" style="margin-top:0">Cancelar</button>
+      <button type="submit" class="btn" style="margin-top:0">Guardar</button>
+    </div>
+  </form>`;
+}
+
+function wirePersonForm(person, t, mode) {
+  const isCreate = mode === 'create';
+  const isAdmin = me && me.role === 'admin';
+  const form = $('#f-person');
+  const decChk = form.querySelector('[name=is_deceased]');
+  const deathDiv = $('#ph-death');
+  decChk.addEventListener('change', () => deathDiv.style.display = decChk.checked ? '' : 'none');
+  const photo = $('#ph-photo');
+  photo.addEventListener('change', () => {
+    const f = photo.files[0];
+    if (f) {
+      const r = new FileReader();
+      r.onload = e => { $('#ph-preview').innerHTML = `<img class="avatar" style="width:56px;height:56px" src="${e.target.result}">`; };
+      r.readAsDataURL(f);
+    }
+  });
+  if (isCreate) {
+    const wa = form.querySelector('[name=with_account]');
+    wa.addEventListener('change', () => $('#ph-acct').style.display = wa.checked ? '' : 'none');
+  }
+  $('#ph-cancel').onclick = closeSheet;
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const btn = form.querySelector('[type=submit]');
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+      const get = k => (fd.get(k) || '').toString().trim();
+      const getId = k => parseInt(fd.get(k), 10) || 0;
+      const rel = {
+        father_id: getId('father_id'), mother_id: getId('mother_id'), link_type: get('link_type') || 'biologico',
+        alt_father_id: getId('alt_father_id'), alt_mother_id: getId('alt_mother_id'),
+        alt_link_type: get('alt_link_type') || 'adoptivo',
+        partner_id: getId('partner_id'), marriage_date: get('marriage_date'), marriage_place: get('marriage_place'),
+        former: fd.getAll('former_partners').map(v => parseInt(v, 10)).filter(Boolean)
+      };
+      let uid;
+      if (isCreate) {
+        const { user, setupCode, linkErrs } = await apiForm('/api/users/admin/people', fd);
+        uid = user.id;
+        await syncRelations(null, uid, rel, t, isAdmin);
+        closeSheet();
+        toast('Familiar agregado ✅' + (linkErrs && linkErrs.length ? ' (' + linkErrs.join('; ') + ')' : ''));
+        if (setupCode) setTimeout(() => alert('Código de acceso para ' + user.name + ': ' + setupCode), 400);
+      } else {
+        uid = person.id;
+        const url = (isAdmin && person.id !== me.id) ? `/api/users/admin/users/${uid}` : '/api/users/me';
+        await apiForm(url, fd, 'PUT');
+        await syncRelations(person, uid, rel, t, isAdmin);
+        closeSheet();
+        toast('Ficha guardada ✅');
+      }
+      if (location.hash.startsWith('#/tree')) viewTree();
+      else if (location.hash.startsWith('#/family')) viewFamily();
+      else location.reload();
+    } catch (err) { toast(err.message); }
+    btn.disabled = false; btn.textContent = 'Guardar';
+  });
+}
+
+async function syncRelations(person, uid, rel, t, isAdmin) {
+  if (!isAdmin) return;
+  const cur = relState(t, uid);
+  const curP1 = new Map(cur.parents1.map(p => [p.id, p]));
+  const curP2 = new Map(cur.parents2.map(p => [p.id, p]));
+  const wantP1 = new Map();
+  if (rel.father_id) wantP1.set(rel.father_id, rel.link_type);
+  if (rel.mother_id) wantP1.set(rel.mother_id, rel.link_type);
+  const wantP2 = new Map();
+  if (rel.alt_father_id) wantP2.set(rel.alt_father_id, rel.alt_link_type);
+  if (rel.alt_mother_id) wantP2.set(rel.alt_mother_id, rel.alt_link_type);
+  for (const [pid] of curP1) if (!wantP1.has(pid))
+    await api('/api/tree/parents', { method: 'DELETE', body: JSON.stringify({ parentId: pid, childId: uid }) }).catch(e => toast(e.message));
+  for (const [pid, lt] of wantP1) if (!curP1.has(pid))
+    await api('/api/tree/parents', { method: 'POST', body: JSON.stringify({ parentId: pid, childId: uid, link_type: lt, link_set: 1 }) }).catch(e => toast(e.message));
+  for (const [pid] of curP2) if (!wantP2.has(pid))
+    await api('/api/tree/parents', { method: 'DELETE', body: JSON.stringify({ parentId: pid, childId: uid }) }).catch(e => toast(e.message));
+  for (const [pid, lt] of wantP2) if (!curP2.has(pid))
+    await api('/api/tree/parents', { method: 'POST', body: JSON.stringify({ parentId: pid, childId: uid, link_type: lt, link_set: 2 }) }).catch(e => toast(e.message));
+  // Pareja actual
+  const curPid = cur.partner ? cur.partner.id : 0;
+  if (curPid !== rel.partner_id) {
+    if (curPid) {
+      const [a, b] = curPid < uid ? [curPid, uid] : [uid, curPid];
+      await api('/api/tree/couples', { method: 'DELETE', body: JSON.stringify({ user1Id: a, user2Id: b }) }).catch(e => toast(e.message));
+    }
+    if (rel.partner_id)
+      await api('/api/tree/couples', { method: 'POST', body: JSON.stringify({ user1Id: uid, user2Id: rel.partner_id, marriage_date: rel.marriage_date, marriage_place: rel.marriage_place, status: 'actual' }) }).catch(e => toast(e.message));
+  } else if (rel.partner_id && (rel.marriage_date || rel.marriage_place)) {
+    // actualizar datos de matrimonio: recrear el vínculo
+    const [a, b] = curPid < uid ? [curPid, uid] : [uid, curPid];
+    await api('/api/tree/couples', { method: 'DELETE', body: JSON.stringify({ user1Id: a, user2Id: b }) }).catch(() => {});
+    await api('/api/tree/couples', { method: 'POST', body: JSON.stringify({ user1Id: uid, user2Id: rel.partner_id, marriage_date: rel.marriage_date, marriage_place: rel.marriage_place, status: 'actual' }) }).catch(e => toast(e.message));
+  }
+  // Parejas anteriores
+  const curF = new Set(cur.former), wantF = new Set(rel.former.filter(id => id !== rel.partner_id));
+  for (const fid of curF) if (!wantF.has(fid)) {
+    const [a, b] = fid < uid ? [fid, uid] : [uid, fid];
+    await api('/api/tree/couples', { method: 'DELETE', body: JSON.stringify({ user1Id: a, user2Id: b }) }).catch(() => {});
+  }
+  for (const fid of wantF) if (!curF.has(fid))
+    await api('/api/tree/couples', { method: 'POST', body: JSON.stringify({ user1Id: uid, user2Id: fid, status: 'anterior' }) }).catch(e => toast(e.message));
+}
+
+function personViewHTML(person, t, isAdmin) {
+  const r = relState(t, person.id);
+  const byId = Object.fromEntries(t.users.map(u => [u.id, u]));
+  const nm = id => byId[id] ? esc(byId[id].name) : '';
+  const rows = [];
+  const kv = (k, v) => { if (v) rows.push(`<p style="margin:6px 0"><strong>${k}:</strong> ${v}</p>`); };
+  if (person.nickname) kv('Apodo', `«${esc(person.nickname)}»`);
+  if (person.maiden_name) kv('Apellido de soltera', esc(person.maiden_name));
+  if (person.sex) kv('Sexo', { M: 'Hombre', F: 'Mujer', X: 'Otro' }[person.sex] || esc(person.sex));
+  kv('Nacimiento', [person.birthdate ? fmtDate(person.birthdate) : '', person.birth_place ? esc(person.birth_place) : ''].filter(Boolean).join(' — '));
+  kv('Bautismo', [person.baptism_date ? fmtDate(person.baptism_date) : '', person.baptism_place ? esc(person.baptism_place) : ''].filter(Boolean).join(' — '));
+  if (person.is_deceased) {
+    kv('Fallecimiento', [person.death_date ? fmtDate(person.death_date) : '', person.death_place ? esc(person.death_place) : ''].filter(Boolean).join(' — '));
+    kv('Causa', person.death_cause ? esc(person.death_cause) : '');
+    kv('Entierro', person.burial_place ? esc(person.burial_place) : '');
+  }
+  kv('Teléfono', person.phone ? esc(person.phone) : '');
+  if (person.bio) kv('Sobre esta persona', esc(person.bio));
+  kv('Ocupación', person.occupation ? esc(person.occupation) : '');
+  kv('Educación', person.education ? esc(person.education) : '');
+  kv('Religión', person.religion ? esc(person.religion) : '');
+  kv('Nacionalidad', person.nationality ? esc(person.nationality) : '');
+  kv('Residencia', person.residence ? esc(person.residence) : '');
+  kv('Servicio militar', person.military_service ? esc(person.military_service) : '');
+  if (person.notes) kv('Notas y fuentes', esc(person.notes));
+  const y = (person.birthdate || '').slice(0, 4), dy = (person.death_date || '').slice(0, 4);
+  return `
+  <div class="sheet-body" style="padding:0">
+    <div style="text-align:center;padding:20px 20px 8px">
+      ${avatarHTML(person, '')}
+      <h2 style="margin:10px 0 2px">${esc(person.name)}${person.is_deceased ? ' ✝' : ''}</h2>
+      <p class="uname">${y || dy ? (person.is_deceased ? `✝ ${y || '…'}–${dy || '…'}` : y) : ''}${person.is_placeholder ? ' · <span class="chip">SOLO ÁRBOL</span>' : ''}</p>
+    </div>
+    <div style="padding:0 20px">
+      ${rows.length ? `<div class="card" style="margin:0 0 12px">${rows.join('')}</div>` : ''}
+      <div class="card" style="margin:0 0 12px"><h3 style="margin-top:0">👨‍👩‍👧 Familia</h3>
+        ${r.parents1.length ? `<p style="margin:6px 0"><strong>Padres:</strong> ${r.parents1.map(p => `${nm(p.id)}${p.link_type !== 'biologico' ? ` (${LINK_TYPE_LABEL[p.link_type]})` : ''}`).join(', ')}</p>` : ''}
+        ${r.parents2.length ? `<p style="margin:6px 0"><strong>Padres (${LINK_TYPE_LABEL[r.parents2[0].link_type]}):</strong> ${r.parents2.map(p => nm(p.id)).join(', ')}</p>` : ''}
+        ${r.partner ? `<p style="margin:6px 0"><strong>Pareja:</strong> ${nm(r.partner.id)}${r.partner.marriage_date ? ` (matr. ${fmtDate(r.partner.marriage_date)})` : ''}</p>` : ''}
+        ${r.former.length ? `<p style="margin:6px 0"><strong>Parejas anteriores:</strong> ${r.former.map(nm).join(', ')}</p>` : ''}
+        ${r.children.length ? `<p style="margin:6px 0"><strong>Hijos:</strong> ${r.children.map(nm).join(', ')}</p>` : ''}
+        ${!r.parents1.length && !r.partner && !r.children.length ? '<p style="color:var(--muted)">Sin relaciones registradas.</p>' : ''}
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;padding:0 20px 20px">
+      ${(isAdmin || person.id === (me && me.id)) ? `<button class="btn" id="pv-edit" style="margin-top:0">✏️ Editar ficha</button>` : `<button class="btn secondary" id="pv-suggest" style="margin-top:0">Proponer corrección</button>`}
+      <button class="btn secondary" id="pv-close" style="margin-top:0">Cerrar</button>
+    </div>
+  </div>`;
+}
+
+function wirePersonView(person, t, isAdmin) {
+  $('#pv-close').onclick = closeSheet;
+  const ed = $('#pv-edit');
+  if (ed) ed.onclick = () => openPersonSheet(person.id, 'edit');
+  const sg = $('#pv-suggest');
+  if (sg) sg.onclick = () => { closeSheet(); location.hash = `#/tree/suggest?uid=${person.id}`; };
+}
+
+async function openPersonSheet(userId, mode) {
+  const isAdmin = me && me.role === 'admin';
+  if (mode === 'create' && !isAdmin) { toast('Solo el administrador puede agregar familiares.'); return; }
+  let t;
+  try { t = await api('/api/tree'); } catch (e) { toast('No se pudo cargar el árbol.'); return; }
+  let person = null;
+  if (userId) {
+    try { person = (await api(`/api/users/by-id/${userId}`)).user; }
+    catch (e) { toast('Persona no encontrada.'); return; }
+    if (mode === 'edit' && !isAdmin && person.id !== me.id) { toast('Sin permiso para editar.'); return; }
+  }
+  if (mode === 'view') {
+    openSheet(personViewHTML(person, t, isAdmin));
+    wirePersonView(person, t, isAdmin);
+  } else {
+    openSheet(`<div class="sheet-body" style="padding:20px">${personFormHTML(person, t, mode)}</div>`);
+    wirePersonForm(person, t, mode);
+  }
+}
+
 // ---------- Árbol genealógico ----------
 let treeData = null;
 
@@ -640,7 +981,8 @@ async function viewTree() {
         <div class="tree-zoom">
           <button id="zoom-out">−</button>
           <button id="zoom-in">＋</button>
-          <button id="zoom-reset" style="background:#e5e7eb;color:var(--text)">⟳</button>
+          <button id="zoom-reset" style="background:#22344f;color:var(--text)">⟳</button>
+          ${me.role === 'admin' ? `<button id="tree-add" style="margin-left:auto;background:transparent;border:1.5px solid var(--green);color:var(--green);font-weight:700">＋ Agregar familiar</button>` : ''}
         </div>
         ${window.TreeModule.renderTreeSVG(layout)}
       </div>
@@ -653,8 +995,22 @@ async function viewTree() {
         </div>
       </div>` : ''}
     <div class="card" style="font-size:.9rem;color:var(--muted)">
-      💡 Toca una persona para ver su perfil o proponer una corrección.
-      ${me.role === 'admin' ? 'Como administrador puedes editar el árbol desde <b>Perfil → Administración → Árbol</b>.' : 'El administrador revisa las correcciones propuestas.'}
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px">
+        <span><span style="color:var(--gold);font-weight:700">━</span> Pareja</span>
+        <span><span style="font-weight:700">┄┄</span> vínculo adoptivo o de acogida</span>
+        <span>✝ fallecido</span>
+      </div>
+      Arrastra con el dedo para moverte por el árbol. Toca una persona para ver su ficha.
+      ${me.role === 'admin' ? '' : 'El administrador revisa las correcciones propuestas.'}
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">📖 Cómo se compone un árbol genealógico</h3>
+      <div style="font-size:.92rem;color:var(--muted);line-height:1.5">
+        <p>Cada persona tiene una <b>ficha</b> con sus datos: nombre, fechas y lugares de nacimiento, bautismo y fallecimiento, ocupación, y notas con las fuentes de donde salió cada dato.</p>
+        <p>Las <b>parejas</b> se dibujan al mismo nivel unidas por una línea dorada. Los <b>hijos</b> cuelgan debajo de sus padres. Los vínculos <b>adoptivos o de acogida</b> usan línea punteada.</p>
+        <p>Las personas <b>fallecidas</b> se muestran en gris con sus años (✝ 1930–2010) como memorial.</p>
+        <p>Lo que no se conozca se deja en blanco: <b>nunca se inventan datos</b>.</p>
+      </div>
     </div>`;
 
   // zoom
@@ -669,24 +1025,50 @@ async function viewTree() {
   $('#zoom-out').onclick = () => { scale = Math.max(0.5, scale - 0.25); applyZoom(); };
   $('#zoom-reset').onclick = () => { scale = 1; applyZoom(); };
 
-  // nodos → hoja con acciones
-  const openFor = uid => {
-    const u = users.find(x => x.id === uid);
-    if (!u) return;
-    openSheet(`
-      <div class="who">${avatarHTML(u)}<div><b>${esc(u.name)}</b><br><small style="color:var(--muted)">@${esc(u.username)}</small></div></div>
-      <button class="btn secondary" id="sh-profile">👤 Ver perfil</button>
-      <button class="btn" id="sh-suggest">✏️ Proponer corrección</button>
-      <button class="btn secondary" id="sh-close">Cerrar</button>`);
-    $('#sh-profile').onclick = () => { closeSheet(); location.hash = '#/u/' + encodeURIComponent(u.username); };
-    $('#sh-suggest').onclick = () => { closeSheet(); location.hash = '#/tree/suggest?uid=' + u.id; };
-    $('#sh-close').onclick = closeSheet;
-  };
+  // nodos → ficha de la persona
+  const openFor = uid => openPersonSheet(uid, 'view');
   $$('#tree-svg .tnode').forEach(n =>
     n.addEventListener('click', () => openFor(+n.dataset.uid)));
   $$('[data-uplink]').forEach(b =>
     b.addEventListener('click', () => openFor(+b.dataset.uplink)));
   $('#tree-suggest-top').onclick = () => location.hash = '#/tree/suggest';
+  const addBtn = $('#tree-add');
+  if (addBtn) addBtn.onclick = () => openPersonSheet(null, 'create');
+}
+
+// ---------- Familia (directorio) ----------
+async function viewFamily() {
+  setNav('family');
+  app.innerHTML = `${topbar('Familia')}<div class="loading">Cargando familia…</div>`;
+  let t;
+  try { t = await api('/api/tree'); }
+  catch { app.innerHTML = `${topbar('Familia')}<div class="empty">No se pudo cargar.</div>`; return; }
+  const users = [...t.users].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const row = u => {
+    const y = (u.birthdate || '').slice(0, 4);
+    const dy = (u.death_date || '').slice(0, 4);
+    const years = u.is_deceased && (y || dy) ? `✝ ${y || '…'}–${dy || '…'}` : (y || '');
+    return `<button class="row" data-person="${u.id}" style="width:100%;background:var(--card);border:0;border-bottom:1px solid var(--border);text-align:left;cursor:pointer">
+      ${avatarHTML(u)}<span class="grow"><b>${esc(u.name)}</b>${u.is_placeholder ? ' <span class="chip">SOLO ÁRBOL</span>' : ''}<small>${years}</small></span><span style="color:var(--muted)">›</span>
+    </button>`;
+  };
+  app.innerHTML = `
+    ${topbar('Familia')}
+    <div style="padding:12px 12px 0"><input type="search" id="fam-q" placeholder="🔍 Buscar familiar…" style="margin:0"></div>
+    <div class="card" style="padding:0;overflow:hidden" id="fam-list">
+      ${users.map(row).join('')}
+    </div>
+    <p style="text-align:center;color:var(--muted);font-size:.85rem">${users.length} persona(s) en la familia</p>`;
+  const q = $('#fam-q'), list = $('#fam-list');
+  q.addEventListener('input', () => {
+    const s = q.value.trim().toLowerCase();
+    list.innerHTML = users.filter(u => u.name.toLowerCase().includes(s)).map(row).join('') ||
+      '<div class="empty">Sin resultados.</div>';
+  });
+  list.addEventListener('click', e => {
+    const b = e.target.closest('[data-person]');
+    if (b) openPersonSheet(+b.dataset.person, 'view');
+  });
 }
 
 function userOptions(users, selected) {
@@ -961,6 +1343,7 @@ async function boot() {
     if (h === '#/new') return viewNew();
     if (h === '#/tree' || h.startsWith('#/tree?')) return viewTree();
     if (h.startsWith('#/tree/suggest')) return viewSuggest();
+    if (h === '#/family') return viewFamily();
     if (h === '#/profile') return viewProfile();
     if (h === '#/settings') return viewSettings();
     if (h === '#/admin') return viewAdmin();
