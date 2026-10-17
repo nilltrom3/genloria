@@ -103,7 +103,7 @@ router.post('/register', authLimiter, (req, res) => {
   if (typeof inviteCode !== 'string' || !inviteCode.trim())
     return res.status(400).json({ error: 'Se requiere un código de invitación.' });
 
-  const code = db.prepare('SELECT * FROM invite_codes WHERE code = ? AND active = 1').get(inviteCode.trim());
+  const code = db.prepare('SELECT * FROM invite_codes WHERE code = ? AND active = 1').get(inviteCode.trim().toUpperCase());
   if (!code) return res.status(403).json({ error: 'Código de invitación inválido o desactivado.' });
   if (code.max_uses > 0 && code.used_count >= code.max_uses)
     return res.status(403).json({ error: 'Este código de invitación ya se agotó.' });
