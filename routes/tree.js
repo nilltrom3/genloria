@@ -122,6 +122,34 @@ const KIND_LABEL = {
   add_couple: 'Agregar pareja', remove_couple: 'Quitar pareja'
 };
 
+// Vincularse uno mismo con familiares (padre, madre, pareja, hijos).
+// Solo permite crear relaciones donde el usuario autenticado es una de las partes.
+// Así cada persona puede conectar su propia familia al registrarse.
+router.post('/self-links', requireAuth, (req, res) => {
+  const meId = req.session.userId;
+  const b = req.body || {};
+  const errs = [];
+  const pid = v => { const n = parseInt(v, 10); return n > 0 && n !== meId && userExists(n) ? n : 0; };
+  const fatherId = pid(b.fatherId), motherId = pid(b.motherId), spouseId = pid(b.spouseId);
+  for (const p of [fatherId, motherId]) {
+    if (!p) continue;
+    const err = addParentLink(p, meId, 'biologico', 1);
+    if (err && !err.includes('ya está registrada')) errs.push(err);
+  }
+  if (spouseId) {
+    const err = addCouple(meId, spouseId, { status: 'actual' });
+    if (err && !err.includes('ya está registrada')) errs.push(err);
+  }
+  const kids = Array.isArray(b.childrenIds) ? b.childrenIds : [];
+  for (const k of kids) {
+    const kidId = pid(k);
+    if (!kidId) continue;
+    const err = addParentLink(meId, kidId, 'biologico', 1);
+    if (err && !err.includes('ya está registrada')) errs.push(err);
+  }
+  res.json({ ok: true, warnings: errs });
+});
+
 router.post('/suggest', requireAuth, (req, res) => {
   const { kind, userAId, userBId, note } = req.body || {};
   if (!KINDS.includes(kind)) return res.status(400).json({ error: 'Tipo de propuesta inválido.' });

@@ -186,6 +186,24 @@ router.post('/admin/people', requireAuth, requireAdmin, avatarUpload.single('pho
   res.status(201).json({ user: publicUser(u), setupCode, linkErrs });
 });
 
+// Crear un familiar sin cuenta (placeholder) — cualquier miembro autenticado.
+// Sirve para agregar al árbol a familiares que aún no tienen cuenta, para invitarlos después.
+router.post('/people', requireAuth, (req, res) => {
+  const name = ((req.body || {}).name || '').toString().trim();
+  if (name.length < 2 || name.length > 80)
+    return res.status(400).json({ error: 'El nombre debe tener entre 2 y 80 caracteres.' });
+  let base = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '.').replace(/^\.|\.$/g, '').slice(0, 20) || 'familiar';
+  if (base.length < 3) base = (base + '000').slice(0, 3);
+  let username = base, i = 1;
+  while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) username = `${base}${i++}`;
+  const unusable = bcrypt.hashSync(require('crypto').randomBytes(32).toString('hex'), 10);
+  const info = db.prepare(`INSERT INTO users (username, name, email, password_hash, role, is_placeholder)
+    VALUES (?,?,NULL,?,?,?)`).run(username, name, unusable, 'member', 1);
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+  res.status(201).json({ user: publicUser(u) });
+});
+
 // Editar ficha de cualquier persona (admin)
 router.put('/admin/users/:id', requireAuth, requireAdmin, avatarUpload.single('photo'), (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);

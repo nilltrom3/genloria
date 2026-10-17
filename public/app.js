@@ -123,7 +123,13 @@ const STR = {
     recoverBtn: 'Cambiar mi contraseña', backToLogin: '← Volver a entrar',
     newToGenloria: '¿Nuevo en GENLORIA?', conoceBtn: 'Conoce GENLORIA',
     conoceSub: 'Descubre todo lo que puedes hacer.', appVersion: 'GENLORIA v1.0',
-    menuConoce: '🌳 Conoce GENLORIA', menuRegister: '👤 Crea tu cuenta', menuLogin: '🔑 Iniciar sesión'
+    menuConoce: '🌳 Conoce GENLORIA', menuRegister: '👤 Crea tu cuenta', menuLogin: '🔑 Iniciar sesión',
+    whoAreYou: '¿Eres una de estas personas?', whoAreYouSub: 'Si tu nombre ya está en el árbol familiar, selecciónalo para vincular tu cuenta.',
+    iAmThis: 'Soy esta persona', notInList: 'No estoy en la lista →', skipForNow: 'Omitir por ahora',
+    connectFamily: 'Conecta tu familia', connectFamilySub: 'Elige a tus familiares o agrega sus nombres para invitarlos después.',
+    father: 'Padre', mother: 'Madre', spouse: 'Esposa/o', children: 'Hijos',
+    noneOption: '— Ninguno —', addNewName: '＋ Agregar nombre nuevo…', newNamePh: 'Nombre del familiar',
+    addChild: '＋ Agregar otro hijo', finishBtn: 'Terminar', welcomeClaimed: '¡Cuenta vinculada! 🎉'
   },
   en: {
     hello: 'Hello!', loginSub: 'Log in to continue your story.',
@@ -142,7 +148,13 @@ const STR = {
     recoverBtn: 'Change my password', backToLogin: '← Back to login',
     newToGenloria: 'New to GENLORIA?', conoceBtn: 'Meet GENLORIA',
     conoceSub: 'Discover everything you can do.', appVersion: 'GENLORIA v1.0',
-    menuConoce: '🌳 Meet GENLORIA', menuRegister: '👤 Create your account', menuLogin: '🔑 Log in'
+    menuConoce: '🌳 Meet GENLORIA', menuRegister: '👤 Create your account', menuLogin: '🔑 Log in',
+    whoAreYou: 'Are you one of these people?', whoAreYouSub: 'If your name is already in the family tree, select it to link your account.',
+    iAmThis: 'This is me', notInList: 'I am not on the list →', skipForNow: 'Skip for now',
+    connectFamily: 'Connect your family', connectFamilySub: 'Choose your relatives or add their names to invite them later.',
+    father: 'Father', mother: 'Mother', spouse: 'Spouse', children: 'Children',
+    noneOption: '— None —', addNewName: '＋ Add a new name…', newNamePh: "Relative's name",
+    addChild: '＋ Add another child', finishBtn: 'Finish', welcomeClaimed: 'Account linked! 🎉'
   }
 };
 const T = k => (STR[appLang] && STR[appLang][k]) || STR.es[k] || k;
@@ -355,10 +367,141 @@ function viewRegister() {
       });
       me = user;
       toast('¡Bienvenido a la familia! 🎉');
-      location.hash = '#/feed';
+      viewClaimIdentity(); // paso 2: ¿ya estás en el árbol?
     } catch (err) {
       $('#err').textContent = err.message;
     }
+  });
+}
+
+// Paso 2 del registro: "¿Eres una de estas personas?" (reclamar placeholder)
+async function viewClaimIdentity() {
+  setNav(null);
+  app.innerHTML = `
+  <div class="login-page">
+    <header class="login-header">
+      <div class="login-brand"><img src="/logo-genloria.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
+    </header>
+    <div class="login-card" style="margin-top:24px">
+      <h2>👤 ${T('whoAreYou')}</h2>
+      <p class="sub">${T('whoAreYouSub')}</p>
+      <div id="ph-list"><div class="loading">Cargando…</div></div>
+      <div class="login-error" id="err"></div>
+      <button class="btn-login" id="btn-notme" style="margin-top:14px;background:var(--card);color:var(--text);border:1.5px solid var(--border)">${T('notInList')}</button>
+      <p class="link" style="text-align:center;margin-top:12px"><a href="#/feed">${T('skipForNow')}</a></p>
+    </div>
+  </div>`;
+  $('#btn-notme').onclick = () => viewConnectFamily();
+  try {
+    const t = await api('/api/tree');
+    const placeholders = t.users.filter(u => u.is_placeholder && u.id !== me.id);
+    $('#ph-list').innerHTML = placeholders.length ? placeholders.map(u => `
+      <div class="row">${avatarHTML(u)}
+        <div class="grow"><b>${esc(u.name)}</b></div>
+        <button class="mini-btn" data-claim="${u.id}">${T('iAmThis')}</button>
+      </div>`).join('') : `<p class="empty">${T('notInList')}</p>`;
+    $$('#ph-list [data-claim]').forEach(b => b.addEventListener('click', async () => {
+      try {
+        const { user } = await api('/api/auth/claim', {
+          method: 'POST', body: JSON.stringify({ placeholderId: +b.dataset.claim })
+        });
+        me = user;
+        toast(T('welcomeClaimed'));
+        location.hash = '#/feed';
+      } catch (err) { $('#err').textContent = err.message; }
+    }));
+  } catch { $('#ph-list').innerHTML = `<p class="empty">${T('notInList')}</p>`; }
+}
+
+// Paso 3 del registro: conectar padre, madre, pareja e hijos (existentes o nuevos)
+async function viewConnectFamily() {
+  setNav(null);
+  let users = [];
+  try { users = (await api('/api/tree')).users.filter(u => u.id !== me.id); } catch {}
+  const opts = sel => `<option value="">${T('noneOption')}</option>` +
+    users.map(u => `<option value="${u.id}">${esc(u.name)}${u.is_placeholder ? ' (árbol)' : ''}</option>`).join('') +
+    `<option value="__new">${T('addNewName')}</option>`;
+  const relRow = (label, key) => `
+    <div style="margin-bottom:12px">
+      <label style="font-weight:700;font-size:.92rem">${label}</label>
+      <select id="rel-${key}" style="margin-top:4px">${opts()}</select>
+      <input type="text" id="rel-${key}-new" class="hidden" placeholder="${T('newNamePh')}" maxlength="80" style="margin-top:8px">
+    </div>`;
+  app.innerHTML = `
+  <div class="login-page">
+    <header class="login-header">
+      <div class="login-brand"><img src="/logo-genloria.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
+    </header>
+    <div class="login-card" style="margin-top:24px">
+      <h2>👪 ${T('connectFamily')}</h2>
+      <p class="sub">${T('connectFamilySub')}</p>
+      <form id="f-connect">
+        ${relRow(T('father'), 'father')}
+        ${relRow(T('mother'), 'mother')}
+        ${relRow(T('spouse'), 'spouse')}
+        <div id="children-wrap"></div>
+        <button type="button" class="mini-btn" id="btn-addchild" style="margin-bottom:14px">${T('addChild')}</button>
+        <div class="login-error" id="err"></div>
+        <button class="btn-login" type="submit">${T('finishBtn')}</button>
+      </form>
+      <p class="link" style="text-align:center;margin-top:12px"><a href="#/feed">${T('skipForNow')}</a></p>
+    </div>
+  </div>`;
+  // Mostrar/ocultar campo de nombre nuevo
+  const wireSelect = sel => {
+    sel.addEventListener('change', () => {
+      const input = $('#rel-' + sel.id.replace('rel-', '') + '-new');
+      if (input) input.classList.toggle('hidden', sel.value !== '__new');
+    });
+  };
+  ['father', 'mother', 'spouse'].forEach(k => wireSelect($('#rel-' + k)));
+  let childN = 0;
+  const addChildRow = () => {
+    const k = 'child' + (childN++);
+    const div = document.createElement('div');
+    div.innerHTML = `<label style="font-weight:700;font-size:.92rem">${T('children')} ${childN}</label>
+      <select id="rel-${k}" style="margin-top:4px;margin-bottom:12px">${opts()}</select>
+      <input type="text" id="rel-${k}-new" class="hidden" placeholder="${T('newNamePh')}" maxlength="80" style="margin-top:8px;margin-bottom:12px">`;
+    $('#children-wrap').appendChild(div);
+    wireSelect($('#rel-' + k));
+  };
+  addChildRow();
+  $('#btn-addchild').onclick = addChildRow;
+  $('#f-connect').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('[type=submit]');
+    btn.disabled = true;
+    try {
+      // Resolver cada selección: id existente o crear placeholder con el nombre nuevo
+      const resolve = async key => {
+        const sel = $('#rel-' + key);
+        if (!sel || !sel.value) return 0;
+        if (sel.value === '__new') {
+          const nm = $('#rel-' + key + '-new').value.trim();
+          if (nm.length < 2) throw new Error(T('newNamePh') + ': ' + nm);
+          const { user } = await api('/api/users/people', {
+            method: 'POST', body: JSON.stringify({ name: nm })
+          });
+          return user.id;
+        }
+        return +sel.value || 0;
+      };
+      const fatherId = await resolve('father');
+      const motherId = await resolve('mother');
+      const spouseId = await resolve('spouse');
+      const childrenIds = [];
+      for (let i = 0; i < childN; i++) {
+        const id = await resolve('child' + i);
+        if (id) childrenIds.push(id);
+      }
+      const r = await api('/api/tree/self-links', {
+        method: 'POST', body: JSON.stringify({ fatherId, motherId, spouseId, childrenIds })
+      });
+      if (r.warnings && r.warnings.length) toast(r.warnings.join('; '));
+      else toast('¡Familia conectada! 🎉');
+      location.hash = '#/feed';
+    } catch (err) { $('#err').textContent = err.message; }
+    btn.disabled = false;
   });
 }
 

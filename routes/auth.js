@@ -144,6 +144,36 @@ router.post('/login', authLimiter, (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
+function requireAuth(req, res, next) {
+  if (!req.session.userId) return res.status(401).json({ error: 'No has iniciado sesión.' });
+  next();
+}
+
+// Reclamar identidad: cuando un familiar se registra con un código y su nombre ya
+// está en el árbol como placeholder (sin cuenta), puede seleccionar "soy esta persona".
+// Su cuenta nueva se fusiona con el placeholder, heredando sus relaciones.
+router.post('/claim', authLimiter, requireAuth, (req, res) => {
+  const placeholderId = parseInt((req.body || {}).placeholderId, 10);
+  if (!placeholderId) return res.status(400).json({ error: 'Elige la persona que eres.' });
+  const me = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  if (!me) return res.status(401).json({ error: 'No has iniciado sesión.' });
+  if (me.is_placeholder) return res.status(400).json({ error: 'Tu cuenta ya está vinculada.' });
+  const ph = db.prepare('SELECT * FROM users WHERE id = ?').get(placeholderId);
+  if (!ph || !ph.is_placeholder)
+    return res.status(404).json({ error: 'Esa persona ya tiene cuenta o no existe.' });
+  if (ph.id === me.id) return res.status(400).json({ error: 'No puedes reclamarte a ti mismo.' });
+  // Fusionar: el placeholder adopta las credenciales de la cuenta nueva.
+  // Primero se borra la cuenta temporal para liberar el email, luego se activa el placeholder.
+  const { name, email, password_hash, avatar_path, bio } = me;
+  db.prepare('DELETE FROM users WHERE id = ?').run(me.id);
+  db.prepare(`UPDATE users SET name = ?, email = ?, password_hash = ?, is_placeholder = 0,
+    avatar_path = COALESCE(avatar_path, ?), bio = COALESCE(NULLIF(bio,''), ?)
+    WHERE id = ?`).run(name, email, password_hash, avatar_path, bio, ph.id);
+  req.session.userId = ph.id;
+  const u = db.prepare('SELECT * FROM users WHERE id = ?').get(ph.id);
+  res.json({ user: publicUser(u) });
+});
+
 // Recuperar clave con código de un solo uso (lo genera el admin y lo comparte;
 // el familiar elige su propia clave nueva — el admin nunca la ve)
 router.post('/recover', authLimiter, (req, res) => {
