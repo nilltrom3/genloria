@@ -1,6 +1,7 @@
 // app.js — SPA de GENLORIA (vanilla JS)
 'use strict';
 
+const APP_VERSION = '5';
 const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const app = $('#app');
@@ -126,6 +127,7 @@ function viewLogin() {
       </div>
       <p class="link">¿Primera vez? <a href="#/register">Crea tu cuenta con el código familiar</a></p>
       <p class="link">¿Olvidaste tu clave? <a href="#/recover">Recupérala con tu código</a></p>
+      <p class="link" style="font-size:.75rem;opacity:.6">GENLORIA v${APP_VERSION}</p>
     </div>`;
   $('#f-login').addEventListener('submit', async e => {
     e.preventDefault();
