@@ -21,7 +21,7 @@ const PERSON_FIELDS = ['nickname', 'maiden_name', 'sex', 'birth_place',
   'military_service', 'notes', 'color'];
 
 function publicUser(u) {
-  const p = { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null, is_deceased: !!u.is_deceased, is_placeholder: !!u.is_placeholder, color: u.color || null, family_id: u.family_id || null };
+  const p = { id: u.id, username: u.username, name: u.name, avatar_path: u.avatar_path, bio: u.bio, role: u.role, created_at: u.created_at, birthdate: u.birthdate || null, phone: u.phone || null, email: u.email || null, is_deceased: !!u.is_deceased, is_placeholder: !!u.is_placeholder, color: u.color || null, family_id: u.family_id || null, is_superadmin: !!u.is_superadmin };
   for (const f of PERSON_FIELDS) p[f] = u[f] || null;
   return p;
 }

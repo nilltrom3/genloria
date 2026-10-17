@@ -129,6 +129,13 @@ for (const [tbl] of [['users'], ['invite_codes'], ['posts'], ['stories']]) {
   const exists = db.prepare(`PRAGMA table_info(${tbl})`).all().some(c => c.name === 'family_id');
   if (!exists) db.prepare(`ALTER TABLE ${tbl} ADD COLUMN family_id INTEGER REFERENCES families(id)`).run();
 }
+// Super-admin de la plataforma (dueño)
+if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'is_superadmin')) {
+  db.prepare('ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0').run();
+  // El primer administrador (cuenta original) es el super-admin
+  const first = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get();
+  if (first) db.prepare('UPDATE users SET is_superadmin = 1 WHERE id = ?').run(first.id);
+}
 
 // Crear familia por defecto y asignar datos existentes
 try {

@@ -271,15 +271,51 @@ router.put('/admin/users/:id/role', requireAuth, requireAdmin, (req, res) => {
 // Generar código de recuperación para un miembro (el admin lo comparte;
 // el familiar elige su propia clave — el admin nunca la ve ni entra a su cuenta)
 router.post('/admin/users/:id/recovery-code', requireAuth, requireAdmin, (req, res) => {
-  const target = db.prepare('SELECT id, name FROM users WHERE id = ?').get(req.params.id);
+  const target = db.prepare('SELECT id, name, family_id FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'Usuario no encontrado.' });
   if (target.id === req.session.userId)
     return res.status(400).json({ error: 'Para tu propia cuenta usa "Editar mi perfil".' });
+  const me = db.prepare('SELECT is_superadmin, family_id FROM users WHERE id = ?').get(req.session.userId);
+  if (!me.is_superadmin && target.family_id !== me.family_id)
+    return res.status(403).json({ error: 'Esa persona no es de tu familia.' });
   const code = issueRecoveryCode(db, target.id);
   res.json({ userId: target.id, name: target.name, code });
 });
 
-// Crear código de invitación
+// ---- Super-admin: estadísticas de toda la plataforma ----
+function requireSuperAdmin(req, res, next) {
+  const me = db.prepare('SELECT is_superadmin FROM users WHERE id = ?').get(req.session.userId);
+  if (!me || !me.is_superadmin) return res.status(403).json({ error: 'Solo el administrador de la plataforma.' });
+  next();
+}
+
+router.get('/platform/stats', requireAuth, requireSuperAdmin, (req, res) => {
+  const totalUsers = db.prepare('SELECT COUNT(*) c FROM users').get().c;
+  const totalFamilies = db.prepare('SELECT COUNT(*) c FROM families').get().c;
+  const totalPosts = db.prepare('SELECT COUNT(*) c FROM posts').get().c;
+  const perFamily = db.prepare(`
+    SELECT f.id, f.name, f.invite_code, f.created_at,
+           COUNT(u.id) AS members,
+           SUM(CASE WHEN u.role = 'admin' THEN 1 ELSE 0 END) AS admins
+    FROM families f LEFT JOIN users u ON u.family_id = f.id
+    GROUP BY f.id ORDER BY f.created_at DESC`).all();
+  // Registros por día (últimos 30 días)
+  const byDay = db.prepare(`
+    SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS n
+    FROM users WHERE created_at >= date('now', '-30 days')
+    GROUP BY day ORDER BY day`).all();
+  res.json({ totalUsers, totalFamilies, totalPosts, perFamily, byDay });
+});
+
+router.get('/platform/users', requireAuth, requireSuperAdmin, (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  let sql = `SELECT u.id, u.name, u.email, u.role, u.is_superadmin, u.created_at, f.name AS family_name
+             FROM users u LEFT JOIN families f ON f.id = u.family_id`;
+  const params = [];
+  if (q) { sql += ' WHERE u.name LIKE ? OR u.email LIKE ?'; params.push(`%${q}%`, `%${q}%`); }
+  sql += ' ORDER BY u.created_at DESC LIMIT 200';
+  res.json({ users: db.prepare(sql).all(...params) });
+});
 router.post('/admin/invite-codes', requireAuth, requireAdmin, (req, res) => {
   const { code, maxUses } = req.body || {};
   const finalCode = (code || '').toString().trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32)

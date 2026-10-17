@@ -1751,9 +1751,10 @@ async function viewAdmin(tab) {
   app.innerHTML = `
     ${topbar('Administración')}
     <div class="tabs">
-      <button id="tab-users" class="${tab !== 'codes' && tab !== 'tree' ? 'active' : ''}">👥 Usuarios</button>
+      <button id="tab-users" class="${tab !== 'codes' && tab !== 'tree' && tab !== 'platform' ? 'active' : ''}">👥 Usuarios</button>
       <button id="tab-codes" class="${tab === 'codes' ? 'active' : ''}">🎟 Códigos</button>
       <button id="tab-tree" class="${tab === 'tree' ? 'active' : ''}">🌳 Árbol</button>
+      ${me.is_superadmin ? `<button id="tab-platform" class="${tab === 'platform' ? 'active' : ''}">🌐 Plataforma</button>` : ''}
     </div>
     <div class="card" id="admin-body"></div>`;
   const body = $('#admin-body');
@@ -1931,15 +1932,68 @@ async function viewAdmin(tab) {
     }));
   }
   function activateTab(name) {
-    ['users', 'codes', 'tree'].forEach(t =>
-      $('#tab-' + t).classList.toggle('active', t === name));
+    ['users', 'codes', 'tree', 'platform'].forEach(t => {
+      const el = $('#tab-' + t);
+      if (el) el.classList.toggle('active', t === name);
+    });
   }
   $('#tab-users').addEventListener('click', () => { activateTab('users'); showUsers(); });
   $('#tab-codes').addEventListener('click', () => { activateTab('codes'); showCodes(); });
   $('#tab-tree').addEventListener('click', () => { activateTab('tree'); adminTreeTab(body); });
+  if (me.is_superadmin) $('#tab-platform').addEventListener('click', () => { activateTab('platform'); showPlatform(); });
   if (tab === 'tree') { activateTab('tree'); adminTreeTab(body); }
   else if (tab === 'codes') { activateTab('codes'); showCodes(); }
+  else if (tab === 'platform' && me.is_superadmin) { activateTab('platform'); showPlatform(); }
   else showUsers();
+}
+
+function showPlatform() {
+  const body = $('#admin-body');
+  body.innerHTML = '<div class="loading">Cargando estadísticas…</div>';
+  api('/api/users/platform/stats').then(({ totalUsers, totalFamilies, totalPosts, perFamily, byDay }) => {
+    const maxDay = Math.max(1, ...byDay.map(d => d.n));
+    body.innerHTML = `
+      <h3 style="margin-top:0">🌐 Toda la plataforma</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div class="card" style="text-align:center;margin:0"><div style="font-size:1.8rem"><b>${totalUsers}</b></div><small>personas registradas</small></div>
+        <div class="card" style="text-align:center;margin:0"><div style="font-size:1.8rem"><b>${totalFamilies}</b></div><small>familias</small></div>
+        <div class="card" style="text-align:center;margin:0"><div style="font-size:1.8rem"><b>${totalPosts}</b></div><small>publicaciones</small></div>
+      </div>
+      <h3>Registros últimos 30 días</h3>
+      <div style="display:flex;align-items:flex-end;gap:2px;height:80px;margin-bottom:16px">
+        ${byDay.map(d => `<div title="${d.day}: ${d.n}" style="flex:1;background:var(--accent);border-radius:2px;min-height:3px;height:${Math.round(d.n / maxDay * 76) + 3}px"></div>`).join('') || '<small>Sin datos</small>'}
+      </div>
+      <h3>Familias (${perFamily.length})</h3>
+      ${perFamily.map(f => `<div class="row">
+        <div class="grow"><b>${esc(f.name)}</b><small>${f.members} miembro(s) · ${f.admins} admin(s) · código: ${esc(f.invite_code)}</small></div>
+      </div>`).join('')}
+      <h3 style="margin-top:16px">Buscar persona</h3>
+      <input type="search" id="plat-q" placeholder="🔍 Nombre o correo…" style="margin-bottom:8px">
+      <div id="plat-results"></div>
+      <div id="plat-recover"></div>`;
+    $('#plat-q').addEventListener('input', async e => {
+      const q = e.target.value.trim();
+      if (q.length < 2) { $('#plat-results').innerHTML = ''; return; }
+      try {
+        const { users } = await api('/api/users/platform/users?q=' + encodeURIComponent(q));
+        $('#plat-results').innerHTML = users.map(u => `<div class="row">${avatarHTML(u)}
+          <div class="grow"><b>${esc(u.name)}</b><small>${esc(u.email || '')} · ${esc(u.family_name || 'Sin familia')}${u.role === 'admin' ? ' · ADMIN' : ''}</small></div>
+          <button class="mini-btn" data-precover="${u.id}">🔑 Código</button>
+        </div>`).join('') || '<p class="empty">Sin resultados</p>';
+        $('#plat-results').querySelectorAll('[data-precover]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            try {
+              const { name, code } = await api(`/api/users/admin/users/${btn.dataset.precover}/recovery-code`, { method: 'POST' });
+              $('#plat-recover').innerHTML = `<div class="card" style="border-color:var(--accent)">
+                <b>Código para ${esc(name)}:</b>
+                <div style="font-size:1.6rem;letter-spacing:.2em;margin:.4rem 0"><b>${esc(code)}</b></div>
+                <small>Válido por 24 horas, un solo uso.</small></div>`;
+            } catch (err) { toast(err.message); }
+          });
+        });
+      } catch (err) { toast(err.message); }
+    });
+  }).catch(err => { body.innerHTML = `<p class="empty">${esc(err.message)}</p>`; });
 }
 
 // ---------- Router ----------
