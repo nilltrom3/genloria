@@ -1439,7 +1439,8 @@ async function viewAdmin(tab) {
       <h3>Códigos</h3>
       ${codes.map(c => `<div class="row">
         <div class="grow"><b>${esc(c.code)}</b><small>${c.used_count}${c.max_uses > 0 ? '/' + c.max_uses : ''} usados · ${c.active ? 'activo' : 'desactivado'}</small></div>
-        ${c.active ? `<button class="mini-btn" data-copy="${esc(c.code)}">📋 Copiar</button>
+        ${c.active ? `<button class="mini-btn" data-share="${esc(c.code)}">📤 Enviar</button>
+        <button class="mini-btn" data-copy="${esc(c.code)}">📋 Copiar</button>
         <button class="mini-btn danger" data-deact="${c.id}">Desactivar</button>` : ''}
       </div>`).join('') || '<p class="empty">Sin códigos</p>'}`;
     $('#f-newcode').addEventListener('submit', async e => {
@@ -1460,6 +1461,17 @@ async function viewAdmin(tab) {
     $$('[data-copy]', body).forEach(b => b.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(b.dataset.copy); toast('Código copiado 📋'); }
       catch { toast('Código: ' + b.dataset.copy); }
+    }));
+    $$('[data-share]', body).forEach(b => b.addEventListener('click', async () => {
+      const code = b.dataset.share;
+      const text = `🌳 Únete a nuestra familia en GENLORIA\n\nTu código familiar es: ${code}\n\nEntra aquí: https://genloria.com\n\nGeneraciones conectadas. Historias que perduran.`;
+      if (navigator.share) {
+        try { await navigator.share({ title: 'Invitación a GENLORIA', text }); }
+        catch (e) { /* el usuario canceló */ }
+      } else {
+        try { await navigator.clipboard.writeText(text); toast('Invitación copiada 📋 — pégala donde quieras enviarla'); }
+        catch { toast(text); }
+      }
     }));
   }
   function activateTab(name) {
