@@ -37,8 +37,23 @@
 <script src="/app.js"></script>
 <script>
 if ('serviceWorker' in navigator) {
+  let refreshing = false;
+  // Cuando una nueva versión toma el control, recargar automáticamente
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+    navigator.serviceWorker.register('/service-worker.js').then(reg => {
+      // Buscar actualizaciones al abrir la app y cada vez que vuelve al frente
+      const checkUpdate = () => reg.update().catch(() => {});
+      checkUpdate();
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) checkUpdate();
+      });
+      setInterval(checkUpdate, 60 * 60 * 1000); // cada hora
+    }).catch(() => {});
   });
 }
 </script>
