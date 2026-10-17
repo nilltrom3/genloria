@@ -118,4 +118,17 @@ router.get('/unread', requireAuth, (req, res) => {
   res.json({ unread: c });
 });
 
+// Cerrar (salir de) una conversación — se elimina para quien la cierra
+router.delete('/conversations/:id', requireAuth, (req, res) => {
+  const meId = req.session.userId;
+  const cid = parseInt(req.params.id, 10);
+  const part = db.prepare('SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?').get(cid, meId);
+  if (!part) return res.status(404).json({ error: 'Conversación no encontrada.' });
+  db.prepare('DELETE FROM conversation_participants WHERE conversation_id = ? AND user_id = ?').run(cid, meId);
+  // Si no quedan participantes, borrar la conversación y sus mensajes
+  const remaining = db.prepare('SELECT COUNT(*) c FROM conversation_participants WHERE conversation_id = ?').get(cid).c;
+  if (remaining === 0) db.prepare('DELETE FROM conversations WHERE id = ?').run(cid);
+  res.json({ ok: true });
+});
+
 module.exports = router;

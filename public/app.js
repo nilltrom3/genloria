@@ -885,11 +885,14 @@ async function viewChatList() {
   try {
     const { conversations } = await api('/api/chat/conversations');
     const items = conversations.map(c => `
-      <div class="row" data-go="#/chat/${c.id}" style="cursor:pointer">
-        ${avatarHTML(c.other)}
-        <div class="grow">${coloredName(c.other)}
-          <small>${c.lastMessage ? esc(c.lastMessage.text.slice(0, 60)) : 'Sin mensajes aún'}</small></div>
-        ${c.unread ? `<span class="badge" style="position:static">${c.unread}</span>` : ''}
+      <div class="row" style="cursor:pointer">
+        <div data-go="#/chat/${c.id}" style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer">
+          ${avatarHTML(c.other)}
+          <div class="grow">${coloredName(c.other)}
+            <small>${c.lastMessage ? esc(c.lastMessage.text.slice(0, 60)) : 'Sin mensajes aún'}</small></div>
+          ${c.unread ? `<span class="badge" style="position:static">${c.unread}</span>` : ''}
+        </div>
+        <button class="mini-btn" data-closechat="${c.id}" title="Cerrar conversación" style="color:#f87171">✕</button>
       </div>`).join('');
     app.innerHTML = `${topbar('Chat')}
       <div style="padding:12px">
@@ -899,6 +902,17 @@ async function viewChatList() {
         </div>
       </div>`;
     $('#btn-new-chat').onclick = () => openNewChatSheet();
+    $$('#chat-list [data-closechat]').forEach(btn => {
+      btn.addEventListener('click', async e => {
+        e.stopPropagation();
+        if (!confirm('¿Cerrar esta conversación? Desaparecerá de tu lista.')) return;
+        try {
+          await api(`/api/chat/conversations/${btn.dataset.closechat}`, { method: 'DELETE' });
+          toast('Conversación cerrada');
+          viewChatList();
+        } catch (err) { toast(err.message); }
+      });
+    });
     chatPollTimer = setInterval(async () => {
       if (!location.hash.startsWith('#/chat') || location.hash.length > 6) return;
       try {
@@ -918,7 +932,8 @@ async function openNewChatSheet() {
       list = users.filter(u => u.id !== me.id && !u.is_placeholder);
     } else {
       const t = await api('/api/tree');
-      list = (t.members || []).filter(m => m.id !== me.id && !m.is_placeholder);
+      list = (t.users || []).filter(m => m.id !== me.id && !m.is_placeholder)
+        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
     }
     openSheet(`<div class="sheet-body"><h3 style="margin-top:0">Nuevo mensaje</h3>
       <input id="chat-search" placeholder="🔍 Buscar familiar…" style="margin-bottom:8px">
