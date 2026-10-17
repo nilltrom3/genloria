@@ -1,5 +1,5 @@
 // service-worker.js — PWA: app shell offline, API siempre a la red.
-const CACHE = 'genloria-v1';
+const CACHE = 'genloria-v2';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/tree.js', '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/avatar-default.svg'
