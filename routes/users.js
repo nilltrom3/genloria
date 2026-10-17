@@ -254,6 +254,20 @@ router.delete('/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// Cambiar rol de un miembro (hacer/quitar administrador de la familia)
+router.put('/admin/users/:id/role', requireAuth, requireAdmin, (req, res) => {
+  const target = db.prepare('SELECT id, role, family_id FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Persona no encontrada.' });
+  if (target.id === req.session.userId)
+    return res.status(400).json({ error: 'No puedes cambiar tu propio rol.' });
+  const myFam = db.getFamilyId(req.session.userId);
+  if (target.family_id !== myFam)
+    return res.status(403).json({ error: 'Esa persona no es de tu familia.' });
+  const newRole = (req.body || {}).role === 'admin' ? 'admin' : 'member';
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(newRole, target.id);
+  res.json({ ok: true, role: newRole });
+});
+
 // Generar código de recuperación para un miembro (el admin lo comparte;
 // el familiar elige su propia clave — el admin nunca la ve ni entra a su cuenta)
 router.post('/admin/users/:id/recovery-code', requireAuth, requireAdmin, (req, res) => {

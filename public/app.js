@@ -1766,7 +1766,10 @@ async function viewAdmin(tab) {
       ${users.map(u => `<div class="row">${avatarHTML(u)}
         <div class="grow">${coloredName(u)}<small>${esc(u.email || '')}${u.role === 'admin' ? ' · ADMIN' : ''}</small></div>
         <input type="color" value="${u.color || userColorFor(u)}" data-coloruser="${u.id}" title="Color de ${esc(u.name)}" style="width:36px;height:28px;padding:0;border:0;background:none;cursor:pointer">
-        ${u.id !== me.id ? `<button class="mini-btn" data-recover="${u.id}">🔑 Código</button>
+        ${u.id !== me.id ? `${u.role === 'admin'
+          ? `<button class="mini-btn" data-role="${u.id}" data-newrole="member" title="Quitar administrador">⬇️ Quitar admin</button>`
+          : `<button class="mini-btn" data-role="${u.id}" data-newrole="admin" title="Hacer administrador">⬆️ Hacer admin</button>`}
+        <button class="mini-btn" data-recover="${u.id}">🔑 Código</button>
         <button class="mini-btn" data-deluser="${u.id}" data-name="${esc(u.name)}" style="color:#f87171">🗑️ Eliminar</button>` : ''}
       </div>`).join('')}
       <div id="recover-code"></div>`;
@@ -1805,6 +1808,22 @@ async function viewAdmin(tab) {
         try {
           await api(`/api/users/admin/users/${btn.dataset.deluser}`, { method: 'DELETE' });
           toast(`${name} eliminado ✅`);
+          viewAdmin();
+        } catch (err) { toast(err.message); }
+      });
+    });
+    body.querySelectorAll('[data-role]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const newRole = btn.dataset.newrole;
+        const label = newRole === 'admin' ? 'hacer administrador' : 'quitarle el rol de administrador';
+        if (!confirm(`¿Seguro que quieres ${label} a este miembro?`)) return;
+        try {
+          await api(`/api/users/admin/users/${btn.dataset.role}/role`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: newRole })
+          });
+          toast(newRole === 'admin' ? 'Ahora es administrador ✅' : 'Ya no es administrador ✅');
           viewAdmin();
         } catch (err) { toast(err.message); }
       });
