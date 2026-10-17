@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>GENLORIA</title>
+<meta name="description" content="GENLORIA — Generaciones unidas, historias que perduran. Red social privada para la familia.">
+<meta name="theme-color" content="#0b2b4f">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="GENLORIA">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="app"></div>
+<nav id="bottomnav" class="hidden">
+  <button data-nav="#/feed" aria-label="Inicio">🏠<span>Inicio</span></button>
+  <button data-nav="#/tree" aria-label="Árbol">🌳<span>Árbol</span></button>
+  <button data-nav="#/new" aria-label="Publicar" class="fab">＋</button>
+  <button data-nav="#/profile" aria-label="Perfil">👤<span>Perfil</span></button>
+</nav>
+<div id="story-viewer" class="hidden"></div>
+<div id="sheet" class="hidden"></div>
+<div id="toast" class="hidden"></div>
+<script src="/tree.js"></script>
+<script src="/app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

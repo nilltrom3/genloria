@@ -1,0 +1,38 @@
+# render.yaml — Despliegue de GENLORIA en Render (https://render.com)
+# Conecta tu repositorio y Render creará el servicio automáticamente.
+
+services:
+  - type: web
+    name: genloria
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true # Render genera un secreto aleatorio
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASS
+        sync: false # defínela en el dashboard de Render (no la guardes aquí)
+      - key: INVITE_CODE
+        value: FAMILIA-2026 # cámbiala en el dashboard por un código propio
+      - key: MAX_PHOTO_MB
+        value: 10
+      - key: MAX_VIDEO_MB
+        value: 100
+
+# ── NOTAS IMPORTANTES ──────────────────────────────────────────────
+# 1) PLAN GRATIS: no tiene disco persistente. La base de datos y las
+#    fotos/videos se guardan en el servidor de forma TEMPORAL: si Render
+#    reinicia o redespliega el servicio, esos datos se pierden.
+#    Para una PRUEBA con pocas personas es aceptable. Para uso real de
+#    la familia, sube al plan Starter (tiene disco persistente) o usa
+#    almacenamiento externo.
+# 2) PLAN GRATIS: el servicio "se duerme" tras 15 minutos sin visitas;
+#    la primera visita tarda ~30 segundos en despertarlo.
+# 3) Al terminar el despliegue, entra con el usuario admin y la clave
+#    que definiste en ADMIN_PASS, y cámbiala desde Perfil → Editar perfil.

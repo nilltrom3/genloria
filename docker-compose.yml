@@ -1,0 +1,23 @@
+services:
+  genloria:
+    build: .
+    container_name: genloria
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # ⚠️ Cambia estos valores antes de exponer la app
+      SESSION_SECRET: ${SESSION_SECRET:?Configura SESSION_SECRET en tu .env}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:?Configura ADMIN_PASS en tu .env}
+      INVITE_CODE: ${INVITE_CODE:-FAMILIA-2026}
+      MAX_PHOTO_MB: ${MAX_PHOTO_MB:-10}
+      MAX_VIDEO_MB: ${MAX_VIDEO_MB:-100}
+    volumes:
+      - genloria-data:/app/data
+      - genloria-uploads:/app/uploads
+
+volumes:
+  genloria-data:
+  genloria-uploads:
