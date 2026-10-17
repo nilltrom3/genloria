@@ -1,7 +1,7 @@
 // app.js — SPA de GENLORIA (vanilla JS)
 'use strict';
 
-const APP_VERSION = '8';
+const APP_VERSION = '9';
 const $ = (sel, el) => (el || document).querySelector(sel);
 const $$ = (sel, el) => [...(el || document).querySelectorAll(sel)];
 const app = $('#app');
@@ -143,7 +143,8 @@ const T = k => (STR[appLang] && STR[appLang][k]) || STR.es[k] || k;
 
 // ---------- Vistas ----------
 function topbar(title, rightBtn) {
-  return `<div class="topbar"><div class="logo"><img src="/icons/icon-192.png" alt="GENLORIA"> GENLORIA</div>${rightBtn || ''}</div>`;
+  const infoBtn = `<button class="topbar-info" data-go="#/about" aria-label="Qué es GENLORIA" title="Qué es GENLORIA">ⓘ</button>`;
+  return `<div class="topbar"><div class="logo"><img src="/icons/icon-192.png" alt="GENLORIA"> GENLORIA</div><div style="display:flex;gap:8px;align-items:center">${infoBtn}${rightBtn || ''}</div></div>`;
 }
 
 function viewLogin() {
@@ -1446,6 +1447,47 @@ async function viewAdmin(tab) {
 }
 
 // ---------- Router ----------
+// ---------- Qué es GENLORIA ----------
+function viewAbout() {
+  setNav(null);
+  app.innerHTML = `
+    ${topbar('Qué es GENLORIA')}
+    <div class="about-hero">
+      <img src="/images/login-hero.jpg" alt="Árbol familiar GENLORIA">
+      <div class="hero-overlay">
+        <h1>GENLORIA</h1>
+        <p><b>Generaciones unidas. Historias que perduran.</b></p>
+      </div>
+    </div>
+    <div class="about-section">
+      <h2>🌳 Qué es GENLORIA</h2>
+      <p>GENLORIA es tu red social familiar privada: un lugar seguro donde tu familia comparte historias, fotos y videos, y construye junta su árbol genealógico. Solo tu familia — nadie más puede ver lo que comparten.</p>
+    </div>
+    <div class="about-section">
+      <h2>🚀 Cómo funciona</h2>
+      <div class="about-steps">
+        <div class="about-step"><span class="n">1</span><div><b>Crea tu cuenta</b><small>Regístrate con el código familiar que te compartió el administrador.</small></div></div>
+        <div class="about-step"><span class="n">2</span><div><b>Completa tu ficha</b><small>Agrega tu foto, tus datos y tu historia en tu perfil familiar.</small></div></div>
+        <div class="about-step"><span class="n">3</span><div><b>Construye el árbol</b><small>Conecta padres, hijos y parejas para ver crecer tu árbol genealógico.</small></div></div>
+        <div class="about-step"><span class="n">4</span><div><b>Comparte momentos</b><small>Publica fotos, videos e historias en el muro familiar.</small></div></div>
+      </div>
+    </div>
+    <div class="about-section">
+      <h2>✨ Qué puedes hacer</h2>
+      <div class="about-feats">
+        <div class="about-feat"><div class="fi">📰</div><b>Muro familiar</b><small>Historias, fotos y videos solo para tu familia.</small></div>
+        <div class="about-feat"><div class="fi">🌳</div><b>Árbol genealógico</b><small>Visualiza tus generaciones con fotos.</small></div>
+        <div class="about-feat"><div class="fi">👥</div><b>Directorio</b><small>Encuentra a cada familiar y su ficha.</small></div>
+        <div class="about-feat"><div class="fi">🔒</div><b>Privado</b><small>Solo miembros invitados. Tus datos son tuyos.</small></div>
+        <div class="about-feat"><div class="fi">📄</div><b>Descargas</b><small>Exporta tu historia en PDF o GEDCOM.</small></div>
+        <div class="about-feat"><div class="fi">📖</div><b>Fichas</b><small>Biografías y datos de cada familiar.</small></div>
+      </div>
+    </div>
+    <div class="about-cta">
+      <button class="btn" data-go="#/feed" style="width:100%">← Volver a la app</button>
+    </div>`;
+}
+
 async function boot() {
   try {
     const { user } = await api('/api/auth/me');
@@ -1468,6 +1510,7 @@ async function boot() {
     if (h === '#/settings') return viewSettings();
     if (h === '#/admin') return viewAdmin();
     if (h === '#/admin/codes') return viewAdmin('codes');
+    if (h === '#/about') return viewAbout();
     const m = h.match(/^#\/u\/(.+)$/);
     if (m) return viewProfile(decodeURIComponent(m[1]));
     location.hash = '#/feed';
@@ -1477,3 +1520,7 @@ async function boot() {
 }
 
 document.addEventListener('DOMContentLoaded', boot);
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-go]');
+  if (b) location.hash = b.dataset.go;
+});
