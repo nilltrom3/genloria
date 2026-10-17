@@ -1833,7 +1833,8 @@ async function viewAdmin(tab) {
   }
   function showCodes() {
     body.innerHTML = `
-      <h3 style="margin-top:0">Nuevo código de invitación</h3>
+      <div id="fam-code-box"><p class="empty">Cargando código de tu familia…</p></div>
+      <h3 style="margin-top:16px">Nuevo código de invitación</h3>
       <p class="sub" style="margin-top:-8px">Genera un código y compártelo con tu familiar. Con ese código creará su cuenta en la pantalla de registro.</p>
       <form id="f-newcode">
         <label>Código (vacío = aleatorio)</label><input type="text" name="code" placeholder="Ej: NAVIDAD-2026">
@@ -1853,11 +1854,35 @@ async function viewAdmin(tab) {
       try {
         const { inviteCode } = await api('/api/users/admin/invite-codes', {
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code: fd.get('code'), maxUses: fd.get('maxUses') })
         });
         toast('Código: ' + inviteCode.code); viewAdmin();
       } catch (err) { toast(err.message); }
     });
+    // Código principal de la familia
+    api('/api/auth/my-family').then(({ family }) => {
+      const box = $('#fam-code-box');
+      if (!box || !family) return;
+      box.innerHTML = `<div class="card" style="border-color:var(--accent)">
+        <b>🌳 ${esc(family.name)}</b><br>
+        <small>Código de tu familia para invitar:</small>
+        <div style="font-size:1.4rem;letter-spacing:.15em;margin:.3rem 0"><b>${esc(family.invite_code)}</b></div>
+        <small>${family.memberCount} miembro(s)</small>
+        <div style="margin-top:8px">
+          <button class="mini-btn" id="fam-share">📤 Enviar</button>
+          <button class="mini-btn" id="fam-copy">📋 Copiar</button>
+        </div></div>`;
+      $('#fam-copy').onclick = async () => {
+        try { await navigator.clipboard.writeText(family.invite_code); toast('Código copiado 📋'); }
+        catch { toast('Código: ' + family.invite_code); }
+      };
+      $('#fam-share').onclick = async () => {
+        const text = `Únete a mi familia "${family.name}" en GENLORIA con el código: ${family.invite_code} — https://genloria.com/#/register`;
+        if (navigator.share) { try { await navigator.share({ text }); } catch {} }
+        else { try { await navigator.clipboard.writeText(text); toast('Copiado 📋'); } catch {} }
+      };
+    }).catch(() => {});
     $$('[data-deact]', body).forEach(b => b.addEventListener('click', async () => {
       await api(`/api/users/admin/invite-codes/${b.dataset.deact}`, { method: 'DELETE' });
       viewAdmin();
