@@ -76,7 +76,7 @@ router.put('/me', requireAuth, avatarUpload.single('avatar'), (req, res) => {
   const pf = cleanPersonFields(req.body);
   const cols = ['nickname', 'maiden_name', 'sex', 'birth_place', 'baptism_date', 'baptism_place',
     'is_deceased', 'death_date', 'death_place', 'death_cause', 'burial_place',
-    'occupation', 'education', 'religion', 'nationality', 'residence', 'military_service', 'notes'];
+    'occupation', 'education', 'religion', 'nationality', 'residence', 'military_service', 'notes', 'color'];
   db.prepare(`UPDATE users SET name = COALESCE(NULLIF(?, ''), name), bio = ?, avatar_path = ?,
               birthdate = ?, phone = ?, email = COALESCE(?, email),
               ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`)
@@ -216,7 +216,7 @@ router.put('/admin/users/:id', requireAuth, requireAdmin, avatarUpload.single('p
   const birthdate = /^\d{4}-\d{2}-\d{2}$/.test((b.birthdate || '').toString()) ? b.birthdate.toString() : null;
   const cols = ['nickname', 'maiden_name', 'sex', 'birth_place', 'baptism_date', 'baptism_place',
     'is_deceased', 'death_date', 'death_place', 'death_cause', 'burial_place',
-    'occupation', 'education', 'religion', 'nationality', 'residence', 'military_service', 'notes'];
+    'occupation', 'education', 'religion', 'nationality', 'residence', 'military_service', 'notes', 'color'];
   let avatar_path = target.avatar_path;
   if (req.file) {
     if (target.avatar_path) fs.unlink(path.join(UPLOAD_DIR, path.basename(target.avatar_path)), () => {});

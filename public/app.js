@@ -1732,7 +1732,8 @@ async function viewAdmin(tab) {
       <div id="setup-code"></div>
       <h3>Miembros (${users.length})</h3>
       ${users.map(u => `<div class="row">${avatarHTML(u)}
-        <div class="grow"><b>${esc(u.name)}</b><small>${esc(u.email || '')}${u.role === 'admin' ? ' · ADMIN' : ''}</small></div>
+        <div class="grow">${coloredName(u)}<small>${esc(u.email || '')}${u.role === 'admin' ? ' · ADMIN' : ''}</small></div>
+        <input type="color" value="${u.color || userColorFor(u)}" data-coloruser="${u.id}" title="Color de ${esc(u.name)}" style="width:36px;height:28px;padding:0;border:0;background:none;cursor:pointer">
         ${u.id !== me.id ? `<button class="mini-btn" data-recover="${u.id}">🔑 Código</button>
         <button class="mini-btn" data-deluser="${u.id}" data-name="${esc(u.name)}" style="color:#f87171">🗑️ Eliminar</button>` : ''}
       </div>`).join('')}
@@ -1784,6 +1785,16 @@ async function viewAdmin(tab) {
             <b>Código de recuperación para ${esc(name)}:</b>
             <div style="font-size:1.6rem;letter-spacing:.2em;margin:.4rem 0"><b>${esc(code)}</b></div>
             <small>Compártelo con ${esc(name)} para que elija su clave nueva. Válido por 24 horas, un solo uso. Tú no verás su clave.</small></div>`;
+        } catch (err) { toast(err.message); }
+      });
+    });
+    body.querySelectorAll('[data-coloruser]').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        try {
+          const fd = new FormData();
+          fd.append('color', inp.value);
+          await api(`/api/users/admin/users/${inp.dataset.coloruser}`, { method: 'PUT', body: fd });
+          toast('Color actualizado ✓');
         } catch (err) { toast(err.message); }
       });
     });
