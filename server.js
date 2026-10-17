@@ -22,13 +22,16 @@ app.use(helmet({
 }));
 app.use(express.json({ limit: '1mb' }));
 
-// Sesiones persistentes en SQLite
+// Sesiones persistentes en SQLite (mismo directorio que la BD principal)
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'genloria.db');
+const SESSION_DIR = path.dirname(DB_PATH);
+fs.mkdirSync(SESSION_DIR, { recursive: true });
 const SESSION_SECRET = process.env.SESSION_SECRET || 'cambia-esto-en-produccion';
 if (!process.env.SESSION_SECRET && isProd) {
   console.warn('[seguridad] SESSION_SECRET no configurado: usando valor de desarrollo. ¡Configúralo!');
 }
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.db', dir: path.join(__dirname, 'data') }),
+  store: new SQLiteStore({ db: 'sessions.db', dir: SESSION_DIR }),
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
