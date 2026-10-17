@@ -74,8 +74,14 @@ async function apiForm(path, formData, method = 'POST') {
 // Comprime una imagen en el teléfono antes de subirla (las fotos del celular
 // suelen pesar 8-20MB y el servidor las rechaza). Devuelve un File listo.
 function compressImageFile(file, maxDim = 1280, quality = 0.82) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (!file || !file.type.startsWith('image/')) return resolve(file);
+    // HEIC/HEIF (formato por defecto del iPhone): el navegador no lo puede
+    // procesar ni mostrar. Avisar con un mensaje claro en vez de fallar.
+    const isHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name || '');
+    if (isHeic) {
+      return reject(new Error('Esta foto está en formato HEIC (iPhone). Abre Ajustes → Cámara → Formatos → "Más compatible", o elige otra foto.'));
+    }
     // GIFs animados y archivos pequeños se suben tal cual
     if (file.type === 'image/gif' || file.size < 900 * 1024) return resolve(file);
     const img = new Image();
