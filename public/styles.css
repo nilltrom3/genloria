@@ -216,7 +216,47 @@ input[type=file] { display: none; }
 }
 .unlinked-grid .avatar { width: 32px; height: 32px; }
 
-/* ---------- Pantalla de acceso (login) ---------- */
+.login-header { position: relative; }
+.login-menu-btn {
+  background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 12px;
+  width: 42px; height: 42px; font-size: 1.4rem; cursor: pointer; line-height: 1;
+}
+.login-menu {
+  position: absolute; top: 100%; right: 12px; z-index: 50;
+  background: #fff; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  min-width: 220px; overflow: hidden; padding: 6px;
+}
+.login-menu button {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  padding: 13px 14px; font-size: .98rem; color: #1f2937; border-radius: 10px; cursor: pointer; font-weight: 600;
+}
+.login-menu button:active { background: #f1f5f9; }
+.login-sep { display: flex; align-items: center; gap: 12px; margin: 20px 0 14px; color: #6b7280; font-weight: 700; font-size: .95rem; }
+.login-sep::before, .login-sep::after { content: ''; flex: 1; height: 1px; background: #e5e7eb; }
+.btn-create-account {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  background: #eaf3fe; border: 1.5px solid #bcd7f7; border-radius: 16px;
+  padding: 15px 16px; cursor: pointer; text-align: left; font: inherit; color: #1f2937;
+}
+.btn-create-account .rc-icon { font-size: 1.9rem; color: var(--primary); }
+.btn-create-account b { display: block; font-size: 1.12rem; color: #1e3a5f; }
+.btn-create-account p { margin: 2px 0 0; color: #5b6b82; font-size: .88rem; }
+.btn-conoce {
+  display: flex; align-items: center; gap: 14px; width: 100%; margin-top: 12px;
+  background: linear-gradient(135deg, #2f8ae0 0%, #1a5fb8 100%);
+  border: 0; border-radius: 16px; padding: 16px; cursor: pointer;
+  text-align: left; font: inherit; color: #fff;
+  box-shadow: 0 8px 24px rgba(26,95,184,.4);
+}
+.btn-conoce .rc-icon { font-size: 2rem; }
+.btn-conoce b { display: block; font-size: 1.2rem; }
+.btn-conoce p { margin: 2px 0 0; opacity: .92; font-size: .9rem; }
+.btn-conoce .rc-go { margin-left: auto; font-size: 1.8rem; font-weight: 700; }
+.btn-conoce:active { transform: scale(.99); }
+.tb-sep { width: 1px; align-self: stretch; background: var(--border); margin: 8px 0; }
+.login-brand img { width: 44px; height: 44px; border-radius: 12px; }
+
+/* Pantalla de acceso (login) ---------- */
 .login-page { min-height: 100vh; background: var(--bg); padding-bottom: 24px; }
 .login-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -234,7 +274,7 @@ input[type=file] { display: none; }
 .login-hero img { width: 100%; height: 300px; object-fit: cover; display: block; }
 .login-hero .hero-overlay {
   position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
-  padding: 24px; background: linear-gradient(90deg, rgba(10,30,60,.55) 0%, rgba(10,30,60,.15) 55%, transparent 100%);
+  padding: 24px; background: linear-gradient(100deg, rgba(8,24,50,.72) 0%, rgba(8,24,50,.42) 45%, rgba(8,24,50,.08) 75%, transparent 100%);
   color: #fff;
 }
 .login-hero h1 { margin: 0; font-size: 2.6rem; letter-spacing: .06em; text-shadow: 0 2px 12px rgba(0,0,0,.45); }

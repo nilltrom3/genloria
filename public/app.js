@@ -120,7 +120,10 @@ const STR = {
     createBtn: 'Crear mi cuenta', hasAccount: '¿Ya tienes cuenta? Entra',
     recoverTitle: 'Recuperar acceso', recoverSub: 'Pide tu código al administrador de tu familia.',
     codeLabel: 'Código de recuperación', newPass: 'Nueva contraseña (mín. 8)',
-    recoverBtn: 'Cambiar mi contraseña', backToLogin: '← Volver a entrar'
+    recoverBtn: 'Cambiar mi contraseña', backToLogin: '← Volver a entrar',
+    newToGenloria: '¿Nuevo en GENLORIA?', conoceBtn: 'Conoce GENLORIA',
+    conoceSub: 'Descubre todo lo que puedes hacer.', appVersion: 'GENLORIA v1.0',
+    menuConoce: '🌳 Conoce GENLORIA', menuRegister: '👤 Crea tu cuenta', menuLogin: '🔑 Iniciar sesión'
   },
   en: {
     hello: 'Hello!', loginSub: 'Log in to continue your story.',
@@ -136,7 +139,10 @@ const STR = {
     createBtn: 'Create my account', hasAccount: 'Already have an account? Log in',
     recoverTitle: 'Recover access', recoverSub: 'Ask your family administrator for your code.',
     codeLabel: 'Recovery code', newPass: 'New password (min. 8)',
-    recoverBtn: 'Change my password', backToLogin: '← Back to login'
+    recoverBtn: 'Change my password', backToLogin: '← Back to login',
+    newToGenloria: 'New to GENLORIA?', conoceBtn: 'Meet GENLORIA',
+    conoceSub: 'Discover everything you can do.', appVersion: 'GENLORIA v1.0',
+    menuConoce: '🌳 Meet GENLORIA', menuRegister: '👤 Create your account', menuLogin: '🔑 Log in'
   }
 };
 const T = k => (STR[appLang] && STR[appLang][k]) || STR.es[k] || k;
@@ -149,11 +155,20 @@ function topbar(title, rightBtn) {
 
 function viewLogin() {
   setNav(null);
+  document.title = 'GENLORIA — Generaciones unidas. Historias que perduran.';
   app.innerHTML = `
   <div class="login-page">
     <header class="login-header">
-      <div class="login-brand"><img src="/icons/icon-192.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
-      <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
+      <div class="login-brand"><img src="/logo-genloria.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
+        <button class="login-menu-btn" id="menu-btn" aria-label="Menú">☰</button>
+      </div>
+      <div class="login-menu hidden" id="login-menu">
+        <button data-go="#/conoce">${T('menuConoce')}</button>
+        <button data-go="#/register">${T('menuRegister')}</button>
+        <button data-go="#/login">${T('menuLogin')}</button>
+      </div>
     </header>
     <div class="login-hero">
       <img src="/images/login-hero.jpg" alt="Árbol familiar">
@@ -183,30 +198,42 @@ function viewLogin() {
           <a href="#/recover">${T('forgot')}</a>
         </div>
       </form>
+      <div class="login-sep"><span>${T('newToGenloria')}</span></div>
+      <button class="btn-create-account" data-go="#/register">
+        <span class="rc-icon">👤</span>
+        <span><b>${T('createAccount')}</b><p>${T('joinTree')}</p></span>
+      </button>
+      <button class="btn-conoce" data-go="#/conoce">
+        <span class="rc-icon">🌳</span>
+        <span><b>${T('conoceBtn')}</b><p>${T('conoceSub')}</p></span>
+        <span class="rc-go">›</span>
+      </button>
     </div>
-    <button class="register-card" data-go="#/register">
-      <span class="rc-icon">👥</span>
-      <span><small>${T('firstTime')}</small><b>${T('createAccount')}</b><p>${T('joinTree')}</p></span>
-      <span class="rc-go">›</span>
-    </button>
     <div class="trust-badges">
       <div><div class="tb-icon">🛡️</div>${T('badge1')}</div>
+      <div class="tb-sep"></div>
       <div><div class="tb-icon">👥</div>${T('badge2')}</div>
+      <div class="tb-sep"></div>
       <div><div class="tb-icon">🌿</div>${T('badge3')}</div>
     </div>
-    <p style="text-align:center;margin-top:16px"><a href="#/conoce" style="color:var(--primary);font-weight:700;text-decoration:none">🌳 Conoce GENLORIA</a></p>
-    <p class="login-version">GENLORIA v${APP_VERSION}</p>
+    <p class="login-version">${T('appVersion')}</p>
   </div>`;
   $('#lang-btn').onclick = () => {
     appLang = appLang === 'es' ? 'en' : 'es';
     localStorage.setItem('genloria-lang', appLang);
     viewLogin();
   };
+  const menuBtn = $('#menu-btn'), menu = $('#login-menu');
+  menuBtn.onclick = e => { e.stopPropagation(); menu.classList.toggle('hidden'); };
+  document.addEventListener('click', function hideMenu(e) {
+    if (!menu.classList.contains('hidden') && !e.target.closest('#login-menu') && !e.target.closest('#menu-btn')) {
+      menu.classList.add('hidden');
+    }
+  });
   $('#toggle-pass').onclick = () => {
     const p = $('#login-pass');
     p.type = p.type === 'password' ? 'text' : 'password';
   };
-  $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
   $('#f-login').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
