@@ -17,6 +17,18 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+// Cada familiar tiene un color único y consistente (por su ID) para
+// distinguir fácilmente quién comenta o publica.
+const USER_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee',
+  '#60a5fa', '#a78bfa', '#f472b6', '#2dd4bf', '#e879f9', '#94a3b8', '#fdba74'];
+function userColor(id) {
+  const n = parseInt(id, 10) || 0;
+  return USER_COLORS[n % USER_COLORS.length];
+}
+function coloredName(user) {
+  if (!user) return '';
+  return `<b style="color:${userColor(user.id)}">${esc(user.name)}</b>`;
+}
 function fmtDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
@@ -602,7 +614,7 @@ function postCardHTML(p) {
   return `<article class="post" data-post="${p.id}">
     <div class="post-head">
       ${avatarHTML(p.author)}
-      <div class="who"><b>${esc(p.author.name)}</b><small>${timeAgo(p.created_at)} · ${fmtDateTime(p.created_at)}</small></div>
+      <div class="who">${coloredName(p.author)}<small>${timeAgo(p.created_at)} · ${fmtDateTime(p.created_at)}</small></div>
       ${canDelete ? `<button class="del" data-postmenu="${p.id}" aria-label="Opciones">⋯</button>` : ''}
     </div>
     ${p.text ? `<div class="post-text">${esc(p.text)}</div>` : ''}
@@ -671,7 +683,7 @@ function renderFeed() {
         const { comments } = await api(`/api/posts/${id}/comments`);
         box.innerHTML = comments.map(c => `
           <div class="comment">${avatarHTML(c.author)}
-            <div><b>${esc(c.author.name)}</b> ${esc(c.text)}<br><small style="color:var(--muted)">${timeAgo(c.created_at)}</small></div>
+            <div>${coloredName(c.author)} ${esc(c.text)}<br><small style="color:var(--muted)">${timeAgo(c.created_at)}</small></div>
           </div>`).join('') + `
           <form class="comment-form" data-cform="${id}">
             <input type="text" name="text" placeholder="Escribe un comentario…" maxlength="500" required>
@@ -842,7 +854,7 @@ async function viewChatList() {
     const items = conversations.map(c => `
       <div class="row" data-go="#/chat/${c.id}" style="cursor:pointer">
         ${avatarHTML(c.other)}
-        <div class="grow"><b>${esc(c.other.name)}</b>
+        <div class="grow">${coloredName(c.other)}
           <small>${c.lastMessage ? esc(c.lastMessage.text.slice(0, 60)) : 'Sin mensajes aún'}</small></div>
         ${c.unread ? `<span class="badge" style="position:static">${c.unread}</span>` : ''}
       </div>`).join('');
@@ -1526,7 +1538,7 @@ async function viewFamily() {
     const dy = (u.death_date || '').slice(0, 4);
     const years = u.is_deceased && (y || dy) ? `✝ ${y || '…'}–${dy || '…'}` : (y || '');
     return `<button class="row" data-person="${u.id}" style="width:100%;background:var(--card);border:0;border-bottom:1px solid var(--border);text-align:left;cursor:pointer">
-      ${avatarHTML(u)}<span class="grow"><b>${esc(u.name)}</b>${u.is_placeholder ? ' <span class="chip">SOLO ÁRBOL</span>' : ''}<small>${years}</small></span><span style="color:var(--muted)">›</span>
+      ${avatarHTML(u)}<span class="grow">${coloredName(u)}${u.is_placeholder ? ' <span class="chip">SOLO ÁRBOL</span>' : ''}<small>${years}</small></span><span style="color:var(--muted)">›</span>
     </button>`;
   };
   app.innerHTML = `
