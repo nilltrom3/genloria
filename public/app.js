@@ -71,6 +71,43 @@ async function apiForm(path, formData, method = 'POST') {
   return data;
 }
 
+// Comprime una imagen en el teléfono antes de subirla (las fotos del celular
+// suelen pesar 8-20MB y el servidor las rechaza). Devuelve un File listo.
+function compressImageFile(file, maxDim = 1280, quality = 0.82) {
+  return new Promise((resolve) => {
+    if (!file || !file.type.startsWith('image/')) return resolve(file);
+    // GIFs animados y archivos pequeños se suben tal cual
+    if (file.type === 'image/gif' || file.size < 900 * 1024) return resolve(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width: w, height: h } = img;
+      if (w <= maxDim && h <= maxDim) return resolve(file);
+      const r = maxDim / Math.max(w, h);
+      w = Math.round(w * r); h = Math.round(h * r);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.toBlob(b => resolve(b ? new File([b], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file),
+        'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+// Reemplaza en el FormData todo archivo de imagen por su versión comprimida
+async function compressFormImages(fd, maxDim, quality) {
+  for (const key of [...fd.keys()]) {
+    const v = fd.get(key);
+    if (v instanceof File && v.size > 0 && v.type.startsWith('image/')) {
+      fd.set(key, await compressImageFile(v, maxDim, quality));
+    }
+  }
+  return fd;
+}
+
 function avatarHTML(user, cls) {
   const src = user && user.avatar_path ? esc(user.avatar_path) : '/icons/avatar-default.svg';
   return `<img class="${cls || 'avatar'}" src="${src}" alt="avatar" onerror="this.src='/icons/avatar-default.svg'">`;
@@ -574,6 +611,7 @@ function renderFeed() {
       fd.append('media', input.files[0]);
       try {
         toast('Subiendo historia…');
+        await compressFormImages(fd, 1280, 0.82);
         await apiForm('/api/stories', fd);
         toast('¡Historia publicada! ✨');
         viewFeed();
@@ -760,6 +798,7 @@ function viewNew() {
     }
     try {
       toast('Publicando…');
+      await compressFormImages(fd, 1600, 0.82);
       await apiForm('/api/posts', fd);
       toast('¡Publicado! 🎉');
       location.hash = '#/feed';
@@ -867,7 +906,9 @@ function viewSettings() {
   $('#f-profile').addEventListener('submit', async e => {
     e.preventDefault();
     try {
-      const { user } = await apiForm('/api/users/me', new FormData(e.target), 'PUT');
+      toast('Guardando…');
+      const fd = await compressFormImages(new FormData(e.target), 800, 0.85);
+      const { user } = await apiForm('/api/users/me', fd, 'PUT');
       me = user;
       toast('Perfil actualizado ✅');
       location.hash = '#/profile';
@@ -1095,6 +1136,7 @@ function wirePersonForm(person, t, mode) {
         former: fd.getAll('former_partners').map(v => parseInt(v, 10)).filter(Boolean)
       };
       let uid;
+      await compressFormImages(fd, 1200, 0.85);
       if (isCreate) {
         const { user, setupCode, linkErrs } = await apiForm('/api/users/admin/people', fd);
         uid = user.id;
