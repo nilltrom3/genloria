@@ -17,18 +17,14 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-// Cada familiar tiene un color único y consistente (por su ID) para
-// distinguir fácilmente quién comenta o publica.
-const USER_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee',
-  '#60a5fa', '#a78bfa', '#f472b6', '#2dd4bf', '#e879f9', '#94a3b8', '#fdba74'];
-function userColor(id) {
-  const n = parseInt(id, 10) || 0;
-  return USER_COLORS[n % USER_COLORS.length];
-}
+// Cada familiar tiene un color único y consistente.
+// Si tiene color preferido guardado se usa ese; si no, se genera uno
+// visualmente distinto usando el ángulo dorado (137.5°) sobre el ID.
 function userColorFor(user) {
-  // Color preferido guardado, o automático por ID
   if (user && user.color && /^#[0-9a-fA-F]{6}$/.test(user.color)) return user.color;
-  return userColor(user ? user.id : 0);
+  const n = parseInt(user && user.id, 10) || 0;
+  const hue = Math.round((n * 137.508) % 360);
+  return `hsl(${hue}, 75%, 62%)`;
 }
 function coloredName(user) {
   if (!user) return '';

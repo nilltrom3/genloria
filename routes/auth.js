@@ -114,26 +114,10 @@ router.post('/register', authLimiter, (req, res) => {
   const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(emailNorm);
   if (exists) return res.status(409).json({ error: 'Ese correo ya está registrado.' });
 
-// Paleta de colores para familiares (los preferidos se asignan manualmente)
-const USER_COLOR_PALETTE = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee',
-  '#60a5fa', '#a78bfa', '#f472b6', '#2dd4bf', '#e879f9', '#94a3b8', '#fdba74'];
-// Elige el color menos usado para que los miembros se vean diferentes
-function pickLeastUsedColor() {
-  const rows = db.prepare('SELECT color, COUNT(*) c FROM users WHERE color IS NOT NULL AND color != ? GROUP BY color').all('');
-  const used = {};
-  for (const r of rows) used[r.color] = r.c;
-  let best = USER_COLOR_PALETTE[0], bestCount = Infinity;
-  for (const c of USER_COLOR_PALETTE) {
-    const n = used[c] || 0;
-    if (n < bestCount) { best = c; bestCount = n; }
-  }
-  return best;
-}
-
   const username = deriveUsername(db, emailNorm, name.trim());
   const hash = bcrypt.hashSync(password, 12);
-  const info = db.prepare('INSERT INTO users (username, name, email, password_hash, color) VALUES (?,?,?,?,?)')
-    .run(username, name.trim(), emailNorm, hash, pickLeastUsedColor());
+  const info = db.prepare('INSERT INTO users (username, name, email, password_hash) VALUES (?,?,?,?)')
+    .run(username, name.trim(), emailNorm, hash);
   db.prepare('UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?').run(code.id);
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
