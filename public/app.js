@@ -456,22 +456,41 @@ async function viewProfile(username) {
     const isMine = me && user.id === me.id;
     // Detalles familiares desde el árbol genealógico
     let familyHTML = '';
-    try {
-      const t = await api('/api/tree');
-      const byId = Object.fromEntries(t.users.map(u => [u.id, u.name]));
+    const t = await api('/api/tree').catch(() => null);
+    if (t) {
+      const byId = Object.fromEntries(t.users.map(u => [u.id, u]));
       const parents = (t.parents[user.id] || []).map(id => byId[id]).filter(Boolean);
       const children = Object.entries(t.parents)
         .filter(([cid, pids]) => pids.includes(user.id))
         .map(([cid]) => byId[cid]).filter(Boolean);
       const pair = (t.couples || []).find(([a, b]) => a === user.id || b === user.id);
       const partner = pair ? byId[pair[0] === user.id ? pair[1] : pair[0]] : null;
+      const isAdmin = me && me.role === 'admin';
       const rows = [];
-      if (partner) rows.push(['💑 Pareja', partner]);
-      if (parents.length) rows.push(['👪 Padres', parents.join(', ')]);
-      if (children.length) rows.push(['🧒 Hijos', children.join(', ')]);
-      if (rows.length) familyHTML = `<div class="card"><h3 style="margin-top:0">👨‍👩‍👧 Familia</h3>` +
-        rows.map(([k, v]) => `<p style="margin:6px 0"><strong>${k}:</strong> ${esc(v)}</p>`).join('') + `</div>`;
-    } catch (e) { /* árbol no disponible */ }
+      if (partner) rows.push(['💑 Pareja', partner.name, `delc:${pair[0]}:${pair[1]}`]);
+      parents.forEach(p => rows.push(['👪 Padre/Madre', p.name, `delp:${p.id}:${user.id}`]));
+      children.forEach(c => rows.push(['🧒 Hijo/a', c.name, `delp:${user.id}:${c.id}`]));
+      familyHTML = `<div class="card"><h3 style="margin-top:0">👨‍👩‍👧 Familia</h3>`;
+      familyHTML += rows.length
+        ? rows.map(([k, v, del]) => `<p style="margin:6px 0"><strong>${k}:</strong> ${esc(v)}${isAdmin ? ` <button class="mini-btn danger" data-famdel="${del}" style="padding:2px 10px">✕</button>` : ''}</p>`).join('')
+        : `<p style="color:var(--muted)">Sin relaciones registradas.</p>`;
+      if (isAdmin) {
+        const opts = t.users.filter(u => u.id !== user.id)
+          .map(u => `<option value="${u.id}">${esc(u.name)} (@${esc(u.username)})</option>`).join('');
+        familyHTML += `
+          <form id="f-famparent" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <select name="parentId" style="flex:1;min-width:130px;padding:10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">Padre/madre…</option>${opts}</select>
+            <button class="mini-btn" type="submit">Añadir</button>
+          </form>
+          ${!partner ? `<form id="f-fampartner" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <select name="partnerId" style="flex:1;min-width:130px;padding:10px;border-radius:8px;border:1.5px solid var(--border)"><option value="">Pareja…</option>${opts}</select>
+            <button class="mini-btn" type="submit">Añadir</button>
+          </form>` : ''}`;
+      } else {
+        familyHTML += `<button class="mini-btn" data-go="#/tree/suggest?uid=${user.id}" style="margin-top:8px">Proponer parentesco</button>`;
+      }
+      familyHTML += `</div>`;
+    }
     const det = [];
     if (user.birthdate) det.push(`<p style="margin:6px 0">🎂 <strong>Nació:</strong> ${esc(fmtDate(user.birthdate))}</p>`);
     if (user.phone) det.push(`<p style="margin:6px 0">📞 <strong>Teléfono:</strong> ${esc(user.phone)}</p>`);
@@ -493,6 +512,35 @@ async function viewProfile(username) {
         ${isMine ? `<button data-logout style="color:var(--danger)">🚪 Cerrar sesión</button>` : ''}
       </div>`;
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
+    const fp = $('#f-famparent');
+    if (fp) fp.addEventListener('submit', async e => {
+      e.preventDefault();
+      const pid = parseInt(new FormData(e.target).get('parentId'), 10);
+      if (!pid) return;
+      try {
+        await api('/api/tree/parents', { method: 'POST', body: JSON.stringify({ parentId: pid, childId: user.id }) });
+        toast('Parentesco agregado ✅'); viewProfile(username);
+      } catch (err) { toast(err.message); }
+    });
+    const fc = $('#f-fampartner');
+    if (fc) fc.addEventListener('submit', async e => {
+      e.preventDefault();
+      const pid = parseInt(new FormData(e.target).get('partnerId'), 10);
+      if (!pid) return;
+      try {
+        await api('/api/tree/couples', { method: 'POST', body: JSON.stringify({ user1Id: user.id, user2Id: pid }) });
+        toast('Pareja agregada ✅'); viewProfile(username);
+      } catch (err) { toast(err.message); }
+    });
+    $$('#app [data-famdel]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('¿Quitar esta relación?')) return;
+      const [kind, a, c] = b.dataset.famdel.split(':');
+      try {
+        if (kind === 'delp') await api('/api/tree/parents', { method: 'DELETE', body: JSON.stringify({ parentId: +a, childId: +c }) });
+        else await api('/api/tree/couples', { method: 'DELETE', body: JSON.stringify({ user1Id: +a, user2Id: +c }) });
+        toast('Relación eliminada ✅'); viewProfile(username);
+      } catch (err) { toast(err.message); }
+    }));
     const lo = $('#app [data-logout]');
     if (lo) lo.addEventListener('click', async () => {
       await api('/api/auth/logout', { method: 'POST' });
@@ -802,6 +850,9 @@ async function viewAdmin(tab) {
       <form id="f-newuser">
         <label>Nombre completo</label><input type="text" name="name" required maxlength="60">
         <label>Correo electrónico</label><input type="email" name="email" required maxlength="120">
+        <label>Padre (opcional)</label><select name="fatherId"><option value="">— Ninguno —</option>${userOptions(users)}</select>
+        <label>Madre (opcional)</label><select name="motherId"><option value="">— Ninguna —</option>${userOptions(users)}</select>
+        <label>Pareja (opcional)</label><select name="partnerId"><option value="">— Ninguna —</option>${userOptions(users)}</select>
         <button class="btn" type="submit">Crear cuenta</button>
       </form>
       <div id="setup-code"></div>
@@ -815,15 +866,28 @@ async function viewAdmin(tab) {
       e.preventDefault();
       const fd = new FormData(e.target);
       try {
-        const { setupCode } = await api('/api/users/admin/users', {
+        const { user, setupCode } = await api('/api/users/admin/users', {
           method: 'POST',
           body: JSON.stringify({ name: fd.get('name'), email: fd.get('email') })
         });
+        const linkErrs = [];
+        const fid = parseInt(fd.get('fatherId'), 10) || 0;
+        const mid = parseInt(fd.get('motherId'), 10) || 0;
+        const pid = parseInt(fd.get('partnerId'), 10) || 0;
+        for (const p of [fid, mid]) {
+          if (!p) continue;
+          try { await api('/api/tree/parents', { method: 'POST', body: JSON.stringify({ parentId: p, childId: user.id }) }); }
+          catch (e) { linkErrs.push(e.message); }
+        }
+        if (pid) {
+          try { await api('/api/tree/couples', { method: 'POST', body: JSON.stringify({ user1Id: user.id, user2Id: pid }) }); }
+          catch (e) { linkErrs.push(e.message); }
+        }
         $('#setup-code').innerHTML = `<div class="card" style="border-color:var(--accent)">
           <b>Código de configuración (compártelo con el familiar):</b>
           <div style="font-size:1.6rem;letter-spacing:.2em;margin:.4rem 0"><b>${esc(setupCode)}</b></div>
           <small>Con este código elegirá su propia clave. Válido por 24 horas, un solo uso.</small></div>`;
-        toast('Cuenta creada ✅'); viewAdmin();
+        toast(linkErrs.length ? 'Cuenta creada ✅ (parentesco: ' + linkErrs.join('; ') + ')' : 'Cuenta creada ✅'); viewAdmin();
       } catch (err) { toast(err.message); }
     });
     body.querySelectorAll('[data-recover]').forEach(btn => {
