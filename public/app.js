@@ -1569,7 +1569,8 @@ async function viewAdmin(tab) {
       <h3>Miembros (${users.length})</h3>
       ${users.map(u => `<div class="row">${avatarHTML(u)}
         <div class="grow"><b>${esc(u.name)}</b><small>${esc(u.email || '')}${u.role === 'admin' ? ' · ADMIN' : ''}</small></div>
-        ${u.id !== me.id ? `<button class="mini-btn" data-recover="${u.id}">🔑 Código</button>` : ''}
+        ${u.id !== me.id ? `<button class="mini-btn" data-recover="${u.id}">🔑 Código</button>
+        <button class="mini-btn" data-deluser="${u.id}" data-name="${esc(u.name)}" style="color:#f87171">🗑️ Eliminar</button>` : ''}
       </div>`).join('')}
       <div id="recover-code"></div>`;
     $('#f-newuser').addEventListener('submit', async e => {
@@ -1599,6 +1600,17 @@ async function viewAdmin(tab) {
           <small>Con este código elegirá su propia clave. Válido por 24 horas, un solo uso.</small></div>`;
         toast(linkErrs.length ? 'Cuenta creada ✅ (parentesco: ' + linkErrs.join('; ') + ')' : 'Cuenta creada ✅'); viewAdmin();
       } catch (err) { toast(err.message); }
+    });
+    body.querySelectorAll('[data-deluser]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.name || 'este miembro';
+        if (!confirm(`¿Eliminar a ${name}?\n\nSe borrará su cuenta, sus publicaciones, fotos, historias y sus parentescos en el árbol. Esta acción no se puede deshacer.`)) return;
+        try {
+          await api(`/api/users/admin/users/${btn.dataset.deluser}`, { method: 'DELETE' });
+          toast(`${name} eliminado ✅`);
+          viewAdmin();
+        } catch (err) { toast(err.message); }
+      });
     });
     body.querySelectorAll('[data-recover]').forEach(btn => {
       btn.addEventListener('click', async () => {

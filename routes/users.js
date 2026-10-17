@@ -233,11 +233,19 @@ router.put('/admin/users/:id', requireAuth, requireAdmin, avatarUpload.single('p
 });
 
 // Eliminar persona (admin; no puede eliminarse a sí mismo)
+// Borra la cuenta y, por CASCADE, sus publicaciones, likes, comentarios,
+// historias y parentescos. También borra sus archivos subidos.
 router.delete('/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
   const target = db.prepare('SELECT id, role, avatar_path FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'Persona no encontrada.' });
   if (target.id === req.session.userId)
     return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta.' });
+  const media = db.prepare(`SELECT media_path FROM posts WHERE user_id = ?
+                            UNION SELECT media_path FROM stories WHERE user_id = ?`)
+    .all(target.id, target.id);
+  for (const m of media) {
+    if (m.media_path) fs.unlink(path.join(UPLOAD_DIR, path.basename(m.media_path)), () => {});
+  }
   if (target.avatar_path) fs.unlink(path.join(UPLOAD_DIR, path.basename(target.avatar_path)), () => {});
   db.prepare('DELETE FROM users WHERE id = ?').run(target.id);
   res.json({ ok: true });
