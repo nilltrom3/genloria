@@ -138,7 +138,7 @@ function checkVideoDuration(fd) {
         vid.preload = 'metadata';
         vid.onloadedmetadata = () => {
           URL.revokeObjectURL(url);
-          if (vid.duration > 180) reject(new Error('El video no puede durar más de 3 minutos.'));
+          if (vid.duration > 60) reject(new Error('El video no puede durar más de 60 segundos.'));
           else resolve();
         };
         vid.onerror = () => { URL.revokeObjectURL(url); resolve(); };
@@ -673,14 +673,30 @@ async function viewFeed() {
 
 function storyBarHTML() {
   const mine = storyGroups.find(g => g.user.id === me.id);
+  const thumb = g => {
+    const s = g.stories[0];
+    const isVideo = s.media_type === 'video';
+    return isVideo
+      ? `<video src="${esc(s.media_path)}" muted playsinline preload="metadata"></video>`
+      : `<img src="${esc(s.media_path)}" alt="">`;
+  };
   let html = `<div class="stories-bar">`;
-  html += `<button class="story-thumb add" id="add-story">
-      <span class="ring"><img src="${me.avatar_path ? esc(me.avatar_path) : '/icons/avatar-default.svg'}" alt="+" onerror="this.src='/icons/avatar-default.svg'"></span>
-      <div class="sname">${mine ? 'Mi historia ＋' : '＋ Historia'}</div>
+  // Mi historia: tarjeta con vista previa o botón para agregar
+  if (mine) {
+    html += `<button class="story-card mine" data-viewmine="1">
+      <span class="sc-thumb">${thumb(mine)}<span class="sc-tree">🌳</span></span>
+      <div class="sname">Mi historia</div>
+      <span class="sc-add" id="add-more-story" title="Agregar">＋</span>
     </button>`;
+  } else {
+    html += `<button class="story-card add" id="add-story">
+      <span class="sc-thumb empty"><img src="${me.avatar_path ? esc(me.avatar_path) : '/icons/avatar-default.svg'}" alt="+" onerror="this.src='/icons/avatar-default.svg'"><span class="sc-plus">＋</span></span>
+      <div class="sname">＋ Historia</div>
+    </button>`;
+  }
   for (const g of storyGroups.filter(g => g.user.id !== me.id)) {
-    html += `<button class="story-thumb" data-stories="${esc(g.user.username)}">
-      <span class="ring"><img src="${g.user.avatar_path ? esc(g.user.avatar_path) : '/icons/avatar-default.svg'}" alt="" onerror="this.src='/icons/avatar-default.svg'"></span>
+    html += `<button class="story-card" data-stories="${esc(g.user.username)}">
+      <span class="sc-thumb">${thumb(g)}</span>
       <div class="sname">${esc(g.user.name.split(' ')[0])}</div>
     </button>`;
   }
@@ -713,7 +729,7 @@ function renderFeed() {
       ${feedCache.length ? feedCache.map(postCardHTML).join('') : '<div class="empty">Aún no hay publicaciones.<br>Sé el primero en compartir algo con la familia 💛</div>'}
     </div>`;
 
-  $('#add-story').addEventListener('click', () => {
+  const openFilePicker = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*,video/*';
@@ -731,15 +747,16 @@ function renderFeed() {
       } catch (e) { toast('Error: ' + e.message); }
     };
     input.click();
-  });
+  };
+  const addBtn = $('#add-story');
+  if (addBtn) addBtn.addEventListener('click', openFilePicker);
+  const moreBtn = $('#add-more-story');
+  if (moreBtn) moreBtn.addEventListener('click', e => { e.stopPropagation(); openFilePicker(); });
+  const mineCard = document.querySelector('[data-viewmine]');
+  if (mineCard) mineCard.addEventListener('click', () => openStoryViewer(me.username));
 
   $$('#feed-list [data-stories]').forEach(b =>
     b.addEventListener('click', () => openStoryViewer(b.dataset.stories)));
-  const mineBtn = storyGroups.find(g => g.user.id === me.id);
-  if (mineBtn) {
-    // si ya tiene historia, el botón ＋ abre su visor también
-    $('#add-story').addEventListener('dblclick', () => openStoryViewer(me.username));
-  }
 
   $('#feed-list').addEventListener('click', async e => {
     const likeBtn = e.target.closest('[data-like]');

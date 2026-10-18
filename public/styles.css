@@ -77,6 +77,40 @@ textarea { min-height: 110px; resize: vertical; }
   scrollbar-width: none;
 }
 .stories-bar::-webkit-scrollbar { display: none; }
+/* Nuevo diseño: tarjetas rectangulares con vista previa (estilo árbol GENLORIA) */
+.story-card {
+  flex: 0 0 auto; width: 96px; text-align: center; cursor: pointer;
+  border: 0; background: none; padding: 0; position: relative;
+}
+.story-card .sc-thumb {
+  width: 96px; height: 128px; border-radius: 16px; overflow: hidden;
+  display: block; position: relative; background: #22344f;
+  border: 2.5px solid transparent;
+  background-clip: padding-box;
+  box-shadow: 0 0 0 2.5px var(--primary);
+}
+.story-card .sc-thumb img, .story-card .sc-thumb video {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.story-card .sc-thumb.empty { box-shadow: 0 0 0 2.5px var(--border); }
+.story-card .sc-tree {
+  position: absolute; bottom: 6px; right: 6px; font-size: 1.1rem;
+  background: rgba(11,43,79,.75); border-radius: 50%; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+}
+.story-card .sc-plus {
+  position: absolute; bottom: 6px; right: 6px; font-size: 1.2rem; font-weight: bold;
+  background: var(--primary); color: #fff; border-radius: 50%; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+}
+.story-card .sc-add {
+  position: absolute; top: -6px; right: -2px; width: 26px; height: 26px;
+  background: var(--primary); color: #fff; border-radius: 50%; font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg);
+}
+.story-card .sname { font-size: .72rem; margin-top: 5px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+/* Compatibilidad con diseño anterior */
 .story-thumb {
   flex: 0 0 auto; width: 68px; text-align: center; cursor: pointer;
   border: 0; background: none; padding: 0;
