@@ -110,6 +110,7 @@ textarea { min-height: 110px; resize: vertical; }
 }
 .story-card .sname { font-size: .72rem; margin-top: 5px; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+.story-card .sname.top { margin-top: 0; margin-bottom: 5px; font-weight: bold; }
 /* Compatibilidad con diseño anterior */
 .story-thumb {
   flex: 0 0 auto; width: 68px; text-align: center; cursor: pointer;

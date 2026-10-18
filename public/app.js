@@ -681,23 +681,23 @@ function storyBarHTML() {
       : `<img src="${esc(s.media_path)}" alt="">`;
   };
   let html = `<div class="stories-bar">`;
-  // Mi historia: tarjeta con vista previa o botón para agregar
+  // Mi historia: nombre arriba con mi color, miniatura abajo
   if (mine) {
     html += `<button class="story-card mine" data-viewmine="1">
+      <div class="sname top" style="color:${userColorFor(me)}">Mi historia</div>
       <span class="sc-thumb">${thumb(mine)}<span class="sc-tree">🌳</span></span>
-      <div class="sname">Mi historia</div>
       <span class="sc-add" id="add-more-story" title="Agregar">＋</span>
     </button>`;
   } else {
     html += `<button class="story-card add" id="add-story">
+      <div class="sname top" style="color:${userColorFor(me)}">＋ Historia</div>
       <span class="sc-thumb empty"><img src="${me.avatar_path ? esc(me.avatar_path) : '/icons/avatar-default.svg'}" alt="+" onerror="this.src='/icons/avatar-default.svg'"><span class="sc-plus">＋</span></span>
-      <div class="sname">＋ Historia</div>
     </button>`;
   }
   for (const g of storyGroups.filter(g => g.user.id !== me.id)) {
     html += `<button class="story-card" data-stories="${esc(g.user.username)}">
+      <div class="sname top" style="color:${userColorFor(g.user)}">${esc(g.user.name.split(' ')[0])}</div>
       <span class="sc-thumb">${thumb(g)}</span>
-      <div class="sname">${esc(g.user.name.split(' ')[0])}</div>
     </button>`;
   }
   html += `</div>`;
