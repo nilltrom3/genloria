@@ -27,7 +27,8 @@ async function sendPushToUser(userId, payload) {
     try {
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        data
+        data,
+        { urgency: 'high', TTL: 3600 }
       );
       console.log(`[push] Enviado a usuario ${userId} (${s.endpoint.slice(0,50)}...)`);
     } catch (e) {

@@ -1,5 +1,5 @@
 // service-worker.js — PWA: app shell con red primero (actualizaciones inmediatas), imágenes en caché.
-const CACHE = 'genloria-v48';
+const CACHE = 'genloria-v49';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/tree.js', '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/avatar-default.svg',
@@ -63,9 +63,23 @@ self.addEventListener('push', (event) => {
       body: data.body,
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
+      tag: data.tag || 'genloria',
+      renotify: true,
       data: { url: data.url || '/#/feed' }
     })
   );
+});
+
+// La app avisa cuando una conversación ya fue leída: cerrar sus notificaciones
+self.addEventListener('message', (event) => {
+  const d = event.data || {};
+  if (d.type === 'clear-notifications' && d.tag) {
+    event.waitUntil(
+      self.registration.getNotifications({ tag: d.tag }).then((list) => {
+        list.forEach((n) => n.close());
+      })
+    );
+  }
 });
 
 self.addEventListener('notificationclick', (event) => {

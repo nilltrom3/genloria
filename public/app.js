@@ -1217,13 +1217,28 @@ async function viewChatThread(cid) {
     };
     appendMsgs(data.messages);
     updateChatBadge();
+    // Cerrar las notificaciones del sistema de esta conversación (ya leída)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.active) reg.active.postMessage({ type: 'clear-notifications', tag: 'chat-' + cid });
+      }).catch(() => {});
+    }
     // Polling de mensajes nuevos cada 4 segundos
     chatPollTimer = setInterval(async () => {
       if (!location.hash.startsWith('#/chat/')) { stopChatPoll(); return; }
       try {
         const d = await api(`/api/chat/conversations/${cid}/messages?limit=20`);
         const fresh = d.messages.filter(m => m.id > lastId);
-        if (fresh.length) appendMsgs(fresh);
+        if (fresh.length) {
+          appendMsgs(fresh);
+          updateChatBadge();
+          // Si llegaron mensajes mientras leo aquí, cerrar sus notificaciones
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then((reg) => {
+              if (reg.active) reg.active.postMessage({ type: 'clear-notifications', tag: 'chat-' + cid });
+            }).catch(() => {});
+          }
+        }
       } catch (e) {}
     }, 4000);
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));

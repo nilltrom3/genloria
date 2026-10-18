@@ -139,7 +139,8 @@ router.post('/conversations/:id/messages', requireAuth, upload.single('media'), 
     sendPushToUser(o.user_id, {
       title: `💬 ${msg.sender_name}`,
       body: text.slice(0, 120) || (media_type === 'video' ? '📹 Te envió un video' : '📷 Te envió una foto'),
-      url: `/#/chat/${cid}`
+      url: `/#/chat/${cid}`,
+      tag: `chat-${cid}`
     }).catch(() => {});
   }
   res.status(201).json({ message: msg });
