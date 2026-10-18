@@ -1798,6 +1798,16 @@ async function viewTree() {
   $('#zoom-out').onclick = () => { scale = Math.max(0.5, scale - 0.25); applyZoom(); };
   $('#zoom-reset').onclick = () => { scale = 1; applyZoom(); };
 
+  // Centrar el árbol en la vista
+  requestAnimationFrame(() => {
+    const sc = $('#tree-scroll');
+    const svg = $('#tree-svg');
+    if (sc && svg) {
+      const svgW = svg.getBoundingClientRect().width || layout.width;
+      sc.scrollLeft = Math.max(0, (svgW - sc.clientWidth) / 2);
+    }
+  });
+
   // nodos → ficha de la persona
   const openFor = uid => openPersonSheet(uid, 'view');
   $$('#tree-svg .tnode').forEach(n =>
