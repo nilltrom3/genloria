@@ -60,7 +60,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 // API
-app.get('/api/version', (req, res) => res.json({ v: 43 }));
+app.get('/api/version', (req, res) => res.json({ v: 44 }));
 app.get('/api/health', (req, res) => res.json({ ok: true, version: '1.0.0' }));
 app.use('/api/auth', require('./routes/auth').router);
 app.use('/api/posts', require('./routes/feed'));

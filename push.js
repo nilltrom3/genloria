@@ -2,13 +2,17 @@
 const webpush = require('web-push');
 const db = require('./db');
 
-const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || 'BBbtH81eXxtuGQyhdPjxDH0NWsfyDMbo19zNNjnj_hKA4PEAtxaLyLhIInWr4Qt-TAlSOAntzDVdMjYkMhM6lQw';
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || 'kMncyQ4sEnsHY4U0gMlqh15cllbvSVDOnZCgilfw5hE';
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY || '';
 
-webpush.setVapidDetails('mailto:admin@genloria.com', VAPID_PUBLIC, VAPID_PRIVATE);
+if (VAPID_PUBLIC && VAPID_PRIVATE) {
+  webpush.setVapidDetails('mailto:admin@genloria.com', VAPID_PUBLIC, VAPID_PRIVATE);
+} else {
+  console.warn('[push] VAPID keys no configuradas — notificaciones push desactivadas');
+}
 
 function getVapidPublicKey() {
-  return VAPID_PUBLIC;
+  return VAPID_PUBLIC || '';
 }
 
 // Envía push a un usuario (todas sus suscripciones)
