@@ -1028,28 +1028,45 @@ async function viewChatThread(cid) {
   stopChatPoll();
   setNav('chat');
   app.innerHTML = `${topbar('Chat')}<div class="loading">Cargando…</div>`;
-  let other = null, lastId = 0;
+  let other = null, lastId = 0, lastDate = '';
+  const fmtTime = ts => new Date(ts + 'Z').toLocaleString('es', { hour: '2-digit', minute: '2-digit' });
+  const fmtDate = ts => new Date(ts + 'Z').toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
   const renderMsg = m => {
     const mine = m.sender_id === me.id;
-    return `<div class="msg ${mine ? 'mine' : 'theirs'}">
-      <div class="bubble">${esc(m.text).replace(/\n/g, '<br>')}</div>
-      <small>${new Date(m.created_at + 'Z').toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</small>
+    const d = fmtDate(m.created_at);
+    let html = '';
+    if (d !== lastDate) { html += `<div class="chat-date">${d}</div>`; lastDate = d; }
+    html += `<div class="msg ${mine ? 'mine' : 'theirs'}">
+      ${mine ? '' : `<img class="msg-av" src="${other.avatar_path ? esc(other.avatar_path) : '/icons/avatar-default.svg'}" onerror="this.src='/icons/avatar-default.svg'">`}
+      <div class="bubble">${esc(m.text).replace(/\n/g, '<br>')}
+        <span class="bmeta">${fmtTime(m.created_at)}${mine ? ' <span class="ticks">✓✓</span>' : ''}</span>
+      </div>
     </div>`;
+    return html;
   };
   try {
     const data = await api(`/api/chat/conversations/${cid}/messages`);
     other = data.other;
     if (!other) { location.hash = '#/chat'; return; }
     app.innerHTML = `
-      <div class="chat-head">
-        <button class="icon-btn" data-go="#/chat">←</button>
-        ${avatarHTML(other, 'avatar sm')}
-        <b style="flex:1">${esc(other.name)}</b>
+      <div class="chat-head2">
+        <button class="icon-btn" data-go="#/chat">‹</button>
+        <span class="ch-av">${avatarHTML(other, 'avatar sm')}<span class="online-dot"></span></span>
+        <span class="ch-info"><b>${esc(other.name)}</b><small>En línea</small></span>
+        <span class="ch-actions">
+          <button class="icon-btn" title="Llamar">📞</button>
+          <button class="icon-btn" title="Video">🎥</button>
+          <button class="icon-btn" title="Más">⋮</button>
+        </span>
       </div>
-      <div id="chat-msgs" class="chat-msgs"></div>
-      <form id="f-chat" class="chat-form">
-        <input id="chat-input" placeholder="Escribe un mensaje…" autocomplete="off" maxlength="2000">
-        <button class="btn" type="submit">➤</button>
+      <div id="chat-msgs" class="chat-msgs2"></div>
+      <form id="f-chat" class="chat-form2">
+        <button type="button" class="round-btn" id="chat-plus" title="Adjuntar">＋</button>
+        <div class="chat-input-wrap">
+          <input id="chat-input" placeholder="Escribe un mensaje…" autocomplete="off" maxlength="2000">
+          <span class="ci-icons">😊 📷 🖼️</span>
+        </div>
+        <button class="round-btn send" type="submit" title="Enviar">➤</button>
       </form>`;
     const box = $('#chat-msgs');
     const appendMsgs = msgs => {
@@ -1069,6 +1086,7 @@ async function viewChatThread(cid) {
         if (fresh.length) appendMsgs(fresh);
       } catch (e) {}
     }, 4000);
+    $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
     $('#f-chat').addEventListener('submit', async e => {
       e.preventDefault();
       const inp = $('#chat-input');
