@@ -117,6 +117,15 @@ function layoutTree(users, parents, couples) {
     }
   });
 
+  // Centrar el árbol horizontalmente (como en el PDF)
+  const minX = Math.min(...units.map(un => un.x - unitW(un) / 2), 0);
+  const maxXr = Math.max(...units.map(un => un.x + unitW(un) / 2), 320);
+  const treeW = maxXr - minX;
+  const shift = (Math.max(treeW + 80, 360) / 2) - (minX + treeW / 2);
+  if (shift !== 0) {
+    units.forEach(un => { un.x += shift; });
+    Object.values(pos).forEach(p => { p.x += shift; });
+  }
   const maxX = Math.max(...units.map(un => un.x + unitW(un) / 2), 320);
   return { units, pos, byId, cpl, parentsMap: parents, width: maxX + 40, height: 60 + maxGen * TREE.GEN_GAP + 110, maxGen };
 }
