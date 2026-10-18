@@ -217,9 +217,14 @@ db.exec(`CREATE TABLE IF NOT EXISTS messages (
   conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   text TEXT NOT NULL,
+  media_path TEXT,
+  media_type TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 db.exec('CREATE INDEX IF NOT EXISTS idx_participants_user ON conversation_participants(user_id)');
+// Migración: agregar columnas de media a messages si no existen
+try { db.exec('ALTER TABLE messages ADD COLUMN media_path TEXT'); } catch {}
+try { db.exec('ALTER TABLE messages ADD COLUMN media_type TEXT'); } catch {}
 db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id)');
 
 // Suscripciones push (notificaciones)

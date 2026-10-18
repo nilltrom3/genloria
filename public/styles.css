@@ -611,3 +611,15 @@ input[type=file] { display: none; }
   background: var(--primary); color: #fff; border-radius: 50%; font-size: 1rem;
   display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg);
 }
+
+.ci-btn { background: none; border: 0; font-size: 1.2rem; cursor: pointer; padding: 4px; }
+.chat-preview {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--card); border-top: 1px solid var(--border);
+}
+.chat-preview img { max-height: 90px; border-radius: 10px; }
+.chat-preview .pv-label { font-size: .85rem; color: var(--text); }
+#chat-preview-x {
+  background: var(--danger); color: #fff; border: 0; border-radius: 50%;
+  width: 28px; height: 28px; cursor: pointer; font-size: .9rem;
+}

@@ -1,9 +1,30 @@
 // routes/chat.js — Chat interno tipo Messenger (1-a-1).
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const db = require('../db');
 const { publicUser } = require('./auth');
 
 const router = express.Router();
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase().slice(0, 10) || '.bin';
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`);
+    }
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) return cb(null, true);
+    cb(new Error('Solo se permiten fotos y videos.'));
+  }
+});
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) return res.status(401).json({ error: 'No has iniciado sesión.' });
@@ -80,7 +101,7 @@ router.get('/conversations/:id/messages', requireAuth, (req, res) => {
   if (!part) return res.status(403).json({ error: 'No tienes acceso a esta conversación.' });
   const before = parseInt(req.query.before, 10) || 0;
   const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
-  let sql = 'SELECT m.id, m.text, m.sender_id, m.created_at, u.name AS sender_name FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.conversation_id = ?';
+  let sql = 'SELECT m.id, m.text, m.media_path, m.media_type, m.sender_id, m.created_at, u.name AS sender_name FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.conversation_id = ?';
   const params = [cid];
   if (before) { sql += ' AND m.id < ?'; params.push(before); }
   sql += ' ORDER BY m.id DESC LIMIT ?';
@@ -94,24 +115,30 @@ router.get('/conversations/:id/messages', requireAuth, (req, res) => {
   res.json({ messages: msgs, other: other ? publicUser(other) : null });
 });
 
-// Enviar mensaje
-router.post('/conversations/:id/messages', requireAuth, (req, res) => {
+// Enviar mensaje (texto y/o foto/video)
+router.post('/conversations/:id/messages', requireAuth, upload.single('media'), (req, res) => {
   const meId = req.session.userId;
   const cid = parseInt(req.params.id, 10);
   const part = db.prepare('SELECT 1 FROM conversation_participants WHERE conversation_id = ? AND user_id = ?').get(cid, meId);
   if (!part) return res.status(403).json({ error: 'No tienes acceso a esta conversación.' });
   const text = ((req.body || {}).text || '').toString().trim().slice(0, 2000);
-  if (!text) return res.status(400).json({ error: 'Escribe un mensaje.' });
-  const info = db.prepare('INSERT INTO messages (conversation_id, sender_id, text) VALUES (?, ?, ?)').run(cid, meId, text);
+  let media_path = null, media_type = null;
+  if (req.file) {
+    media_path = '/uploads/' + req.file.filename;
+    media_type = req.file.mimetype.startsWith('video/') ? 'video' : 'image';
+  }
+  if (!text && !media_path) return res.status(400).json({ error: 'Escribe un mensaje o adjunta una foto.' });
+  const info = db.prepare('INSERT INTO messages (conversation_id, sender_id, text, media_path, media_type) VALUES (?, ?, ?, ?, ?)')
+    .run(cid, meId, text, media_path, media_type);
   db.prepare("UPDATE conversations SET updated_at = datetime('now') WHERE id = ?").run(cid);
-  const msg = db.prepare('SELECT m.id, m.text, m.sender_id, m.created_at, u.name AS sender_name FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(info.lastInsertRowid);
+  const msg = db.prepare('SELECT m.id, m.text, m.media_path, m.media_type, m.sender_id, m.created_at, u.name AS sender_name FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(info.lastInsertRowid);
   // Notificar a los otros participantes
   const others = db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(cid, meId);
   const { sendPushToUser } = require('../push');
   for (const o of others) {
     sendPushToUser(o.user_id, {
       title: `💬 ${msg.sender_name}`,
-      body: text.slice(0, 120),
+      body: text.slice(0, 120) || (media_type === 'video' ? '📹 Te envió un video' : '📷 Te envió una foto'),
       url: `/#/chat/${cid}`
     }).catch(() => {});
   }

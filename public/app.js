@@ -735,10 +735,11 @@ function renderFeed() {
       ${feedCache.length ? feedCache.map(postCardHTML).join('') : '<div class="empty">Aún no hay publicaciones.<br>Sé el primero en compartir algo con la familia 💛</div>'}
     </div>`;
 
-  const openFilePicker = () => {
+  const openFilePicker = (useCamera) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*,video/*';
+    if (useCamera) input.setAttribute('capture', 'environment');
     input.onchange = async () => {
       if (!input.files[0]) return;
       const fd = new FormData();
@@ -754,10 +755,14 @@ function renderFeed() {
     };
     input.click();
   };
+  const askStorySource = (cb) => {
+    const choice = confirm('¿Tomar foto con la cámara?\nAceptar = Cámara / Cancelar = Galería');
+    cb(choice);
+  };
   const addBtn = $('#add-story');
-  if (addBtn) addBtn.addEventListener('click', openFilePicker);
+  if (addBtn) addBtn.addEventListener('click', () => askStorySource(openFilePicker));
   const moreBtn = $('#add-more-story');
-  if (moreBtn) moreBtn.addEventListener('click', e => { e.stopPropagation(); openFilePicker(); });
+  if (moreBtn) moreBtn.addEventListener('click', e => { e.stopPropagation(); askStorySource(openFilePicker); });
   const mineCard = document.querySelector('[data-viewmine]');
   if (mineCard) mineCard.addEventListener('click', () => openStoryViewer(me.username));
 
@@ -907,8 +912,11 @@ function viewNew() {
       <form id="f-post">
         <label>¿Qué quieres compartir con la familia?</label>
         <textarea name="text" maxlength="2000" placeholder="Escribe algo…"></textarea>
-        <label class="file-label" for="media-input">📷 Añadir foto o video</label>
-        <input type="file" id="media-input" name="media" accept="image/*,video/*">
+        <div style="display:flex;gap:8px;margin:8px 0">
+          <button type="button" class="mini-btn" id="btn-cam">📷 Tomar foto</button>
+          <button type="button" class="mini-btn" id="btn-gal">🖼️ Elegir de galería</button>
+        </div>
+        <input type="file" id="media-input" name="media" accept="image/*,video/*" class="hidden">
         <div class="preview hidden" id="preview"></div>
         <div class="error hidden" id="err"></div>
         <button class="btn" type="submit">Publicar 💛</button>
@@ -924,6 +932,15 @@ function viewNew() {
       ? `<video src="${url}" controls playsinline></video>`
       : `<img src="${url}" alt="vista previa">`;
     pv.classList.remove('hidden');
+  });
+  const mediaInput = document.getElementById('media-input');
+  document.getElementById('btn-cam').addEventListener('click', () => {
+    mediaInput.setAttribute('capture', 'environment');
+    mediaInput.click();
+  });
+  document.getElementById('btn-gal').addEventListener('click', () => {
+    mediaInput.removeAttribute('capture');
+    mediaInput.click();
   });
   $('#f-post').addEventListener('submit', async e => {
     e.preventDefault();
@@ -1040,9 +1057,15 @@ async function viewChatThread(cid) {
     const d = fmtDate(m.created_at);
     let html = '';
     if (d !== lastDate) { html += `<div class="chat-date">${d}</div>`; lastDate = d; }
+    let mediaHTML = '';
+    if (m.media_path) {
+      mediaHTML = m.media_type === 'video'
+        ? `<video src="${esc(m.media_path)}" controls playsinline style="max-width:100%;border-radius:12px;margin-bottom:4px"></video>`
+        : `<img src="${esc(m.media_path)}" style="max-width:100%;border-radius:12px;margin-bottom:4px" onclick="window.open('${esc(m.media_path)}','_blank')">`;
+    }
     html += `<div class="msg ${mine ? 'mine' : 'theirs'}">
       ${mine ? '' : `<img class="msg-av" src="${other.avatar_path ? esc(other.avatar_path) : '/icons/avatar-default.svg'}" onerror="this.src='/icons/avatar-default.svg'">`}
-      <div class="bubble">${esc(m.text).replace(/\n/g, '<br>')}
+      <div class="bubble">${mediaHTML}${m.text ? esc(m.text).replace(/\n/g, '<br>') : ''}
         <span class="bmeta">${fmtTime(m.created_at)}${mine ? ' <span class="ticks">✓✓</span>' : ''}</span>
       </div>
     </div>`;
@@ -1068,10 +1091,15 @@ async function viewChatThread(cid) {
         <button type="button" class="round-btn" id="chat-plus" title="Adjuntar">＋</button>
         <div class="chat-input-wrap">
           <input id="chat-input" placeholder="Escribe un mensaje…" autocomplete="off" maxlength="2000">
-          <span class="ci-icons">😊 📷 🖼️</span>
+          <button type="button" class="ci-btn" id="chat-emoji" title="Emoji">😊</button>
+          <button type="button" class="ci-btn" id="chat-camera" title="Tomar foto">📷</button>
+          <button type="button" class="ci-btn" id="chat-photo" title="Elegir foto">🖼️</button>
         </div>
         <button class="round-btn send" type="submit" title="Enviar">➤</button>
-      </form>`;
+      </form>
+      <div id="chat-preview" class="chat-preview" style="display:none">
+        <img id="chat-preview-img"><button type="button" id="chat-preview-x">✕</button>
+      </div>`;
     const box = $('#chat-msgs');
     const appendMsgs = msgs => {
       for (const m of msgs) {
@@ -1091,16 +1119,57 @@ async function viewChatThread(cid) {
       } catch (e) {}
     }, 4000);
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
+    // Adjuntar foto/video en el chat
+    let chatMediaFile = null;
+    const pickChatMedia = (useCamera) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*,video/*';
+      if (useCamera) input.setAttribute('capture', 'environment');
+      input.onchange = () => {
+        if (!input.files[0]) return;
+        chatMediaFile = input.files[0];
+        const prev = $('#chat-preview'), pimg = $('#chat-preview-img');
+        if (chatMediaFile.type.startsWith('image/')) {
+          pimg.src = URL.createObjectURL(chatMediaFile);
+          pimg.style.display = '';
+          prev.style.display = 'flex';
+        } else {
+          pimg.style.display = 'none';
+          prev.style.display = 'flex';
+          prev.querySelector('span.pv-label')?.remove();
+          prev.insertAdjacentHTML('afterbegin', '<span class="pv-label">📹 Video listo para enviar</span>');
+        }
+      };
+      input.click();
+    };
+    $('#chat-camera').addEventListener('click', () => pickChatMedia(true));
+    $('#chat-photo').addEventListener('click', () => pickChatMedia(false));
+    $('#chat-plus').addEventListener('click', () => pickChatMedia(false));
+    $('#chat-emoji').addEventListener('click', () => { const i = $('#chat-input'); i.value += '😊'; i.focus(); });
+    $('#chat-preview-x').addEventListener('click', () => {
+      chatMediaFile = null;
+      $('#chat-preview').style.display = 'none';
+      $('#chat-preview-img').src = '';
+    });
     $('#f-chat').addEventListener('submit', async e => {
       e.preventDefault();
       const inp = $('#chat-input');
       const text = inp.value.trim();
-      if (!text) return;
+      if (!text && !chatMediaFile) return;
       inp.value = '';
+      $('#chat-preview').style.display = 'none';
       try {
-        const { message } = await api(`/api/chat/conversations/${cid}/messages`, {
-          method: 'POST', body: JSON.stringify({ text }) });
+        const fd = new FormData();
+        fd.append('text', text);
+        if (chatMediaFile) {
+          if (chatMediaFile.type.startsWith('video/')) await checkVideoDuration(fd);
+          fd.append('media', chatMediaFile);
+        }
+        await compressFormImages(fd, 1280, 0.82);
+        const { message } = await apiForm(`/api/chat/conversations/${cid}/messages`, fd);
         appendMsgs([message]);
+        chatMediaFile = null;
       } catch (err) { toast(err.message); inp.value = text; }
     });
   } catch (err) {
