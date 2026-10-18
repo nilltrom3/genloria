@@ -95,6 +95,14 @@ router.post('/', requireAuth, upload.single('media'), (req, res) => {
   const fid = db.getFamilyId(req.session.userId);
   const info = db.prepare('INSERT INTO posts (user_id, text, media_path, media_type, family_id) VALUES (?,?,?,?,?)')
     .run(req.session.userId, text, media_path, media_type, fid);
+  // Notificar a la familia
+  const author = db.prepare('SELECT name FROM users WHERE id = ?').get(req.session.userId);
+  const { sendPushToFamily } = require('../push');
+  sendPushToFamily(fid, req.session.userId, {
+    title: `📸 ${author.name} publicó algo nuevo`,
+    body: text.slice(0, 120) || 'Mira lo que compartió en la familia',
+    url: '/#/feed'
+  }).catch(() => {});
   const row = db.prepare(`SELECT p.id AS post_id, p.text, p.media_path, p.media_type, p.created_at,
                           u.id AS uid, u.username, u.name, u.avatar_path
                           FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ?`)

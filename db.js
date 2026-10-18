@@ -222,6 +222,17 @@ db.exec(`CREATE TABLE IF NOT EXISTS messages (
 db.exec('CREATE INDEX IF NOT EXISTS idx_participants_user ON conversation_participants(user_id)');
 db.exec('CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, id)');
 
+// Suscripciones push (notificaciones)
+db.exec(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)');
+
 // Limpieza periódica de historias vencidas (cada 15 minutos)
 setInterval(() => {
   try {

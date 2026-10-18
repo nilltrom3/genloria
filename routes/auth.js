@@ -245,4 +245,20 @@ router.get('/my-family', requireAuth, (req, res) => {
   res.json({ family: { ...family, memberCount } });
 });
 
+// Clave pública VAPID para suscribirse a push
+router.get('/push-key', (req, res) => {
+  const { getVapidPublicKey } = require('../push');
+  res.json({ publicKey: getVapidPublicKey() });
+});
+
+// Guardar suscripción push
+router.post('/push-subscribe', requireAuth, (req, res) => {
+  const { endpoint, p256dh, auth } = req.body || {};
+  if (!endpoint || !p256dh || !auth)
+    return res.status(400).json({ error: 'Suscripción inválida.' });
+  db.prepare(`INSERT OR REPLACE INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+              VALUES (?,?,?,?)`).run(req.session.userId, endpoint, p256dh, auth);
+  res.json({ ok: true });
+});
+
 module.exports = { router, publicUser, issueRecoveryCode, validEmail, cleanPersonFields, PERSON_FIELDS };

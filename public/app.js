@@ -1130,9 +1130,18 @@ async function viewProfile(username) {
       <div class="menu-list">
         ${isMine ? `<button data-go="#/settings">✏️ Editar mi perfil</button>` : ''}
         ${me && me.role === 'admin' ? `<button data-go="#/admin">🛠 Administración</button>` : ''}
+        ${isMine ? `<button id="btn-push">🔔 Activar notificaciones</button>` : ''}
         ${isMine ? `<button data-logout style="color:var(--danger)">🚪 Cerrar sesión</button>` : ''}
       </div>`;
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
+    const pb = $('#btn-push');
+    if (pb) {
+      // Ocultar si ya están activadas
+      if ('Notification' in window && Notification.permission === 'granted') pb.style.display = 'none';
+      pb.addEventListener('click', () => requestPushPermission().then(() => {
+        if (Notification.permission === 'granted') pb.style.display = 'none';
+      }));
+    }
     $('#btn-ficha').onclick = () => openPersonSheet(user.id, 'view');
     const lo = $('#app [data-logout]');
     if (lo) lo.addEventListener('click', async () => {

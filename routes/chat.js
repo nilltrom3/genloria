@@ -105,6 +105,16 @@ router.post('/conversations/:id/messages', requireAuth, (req, res) => {
   const info = db.prepare('INSERT INTO messages (conversation_id, sender_id, text) VALUES (?, ?, ?)').run(cid, meId, text);
   db.prepare("UPDATE conversations SET updated_at = datetime('now') WHERE id = ?").run(cid);
   const msg = db.prepare('SELECT m.id, m.text, m.sender_id, m.created_at, u.name AS sender_name FROM messages m JOIN users u ON u.id = m.sender_id WHERE m.id = ?').get(info.lastInsertRowid);
+  // Notificar a los otros participantes
+  const others = db.prepare('SELECT user_id FROM conversation_participants WHERE conversation_id = ? AND user_id != ?').all(cid, meId);
+  const { sendPushToUser } = require('../push');
+  for (const o of others) {
+    sendPushToUser(o.user_id, {
+      title: `💬 ${msg.sender_name}`,
+      body: text.slice(0, 120),
+      url: `/#/chat/${cid}`
+    }).catch(() => {});
+  }
   res.status(201).json({ message: msg });
 });
 

@@ -53,8 +53,72 @@ if ('serviceWorker' in navigator) {
         if (!document.hidden) checkUpdate();
       });
       setInterval(checkUpdate, 60 * 60 * 1000); // cada hora
+      // Suscribirse a notificaciones push (si hay sesión)
+      setupPush(reg);
     }).catch(() => {});
   });
+}
+
+// Notificaciones push: pedir permiso y suscribirse
+async function setupPush(reg) {
+  try {
+    if (!('PushManager' in window) || Notification.permission === 'denied') return;
+    // Solo suscribir si hay sesión activa
+    const meRes = await fetch('/api/auth/me').then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!meRes || !meRes.user) return;
+    if (Notification.permission === 'default') {
+      // Pedir permiso de forma no intrusiva: solo si el usuario interactúa
+      // (el navegador puede bloquear el prompt sin gesto del usuario)
+      return;
+    }
+    const { publicKey } = await fetch('/api/auth/push-key').then(r => r.json());
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey)
+    });
+    await fetch('/api/auth/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: sub.endpoint,
+        p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),
+        auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))
+      })
+    });
+  } catch (e) { /* push no disponible o sin permiso */ }
+}
+
+function urlBase64ToUint8Array(base64) {
+  const padding = '='.repeat((4 - base64.length % 4) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+// Pedir permiso de notificaciones con un botón visible
+async function requestPushPermission() {
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      const reg = await navigator.serviceWorker.ready;
+      // Forzar suscripción ahora que hay permiso
+      const { publicKey } = await fetch('/api/auth/push-key').then(r => r.json());
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+      await fetch('/api/auth/push-subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: sub.endpoint,
+          p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),
+          auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))
+        })
+      });
+      toast('Notificaciones activadas 🔔');
+    }
+  } catch (e) { toast('No se pudieron activar las notificaciones'); }
 }
 </script>
 </body>
