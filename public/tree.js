@@ -81,26 +81,54 @@ function layoutTree(users, parents, couples) {
     cursor += unitW(un) + GAP;
   });
 
-  // generaciones siguientes: centradas bajo sus padres + resolución de solapes
+  // generaciones siguientes: hijos balanceados y centrados bajo sus padres
   for (let g = 1; g <= maxGen; g++) {
     const arr = (byGen[g] || []).slice();
     arr.forEach(un => { un.anchor = anchorOf(un); });
-    arr.sort((a, b) => (a.anchor === null) - (b.anchor === null) || (a.anchor || 1e9) - (b.anchor || 1e9));
-    let c = 0;
+    // Agrupar por ancla (padres comunes) para balancear cada familia
+    const groups = {};
     arr.forEach(un => {
-      const w = unitW(un);
-      const target = un.anchor === null ? c + w / 2 : un.anchor;
-      un.x = Math.max(c + w / 2, target);
-      c = un.x + w / 2 + GAP;
+      const key = un.anchor === null ? 'null' : Math.round(un.anchor);
+      (groups[key] = groups[key] || []).push(un);
     });
-    // 3 pasadas de centrado sin solapes
-    for (let it = 0; it < 3; it++) {
-      for (let i = 0; i < arr.length; i++) {
-        const un = arr[i], w = unitW(un);
-        if (un.anchor === null) continue;
-        const prevR = i > 0 ? arr[i - 1].x + unitW(arr[i - 1]) / 2 + GAP : 0;
-        const nextL = i < arr.length - 1 ? arr[i + 1].x - unitW(arr[i + 1]) / 2 - GAP : Infinity;
-        un.x = Math.min(Math.max(un.anchor, prevR + w / 2), nextL - w / 2);
+    // Ordenar grupos por ancla
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      if (a === 'null') return 1;
+      if (b === 'null') return -1;
+      return +a - +b;
+    });
+    let c = 0;
+    for (const key of sortedKeys) {
+      const grp = groups[key];
+      const anchor = key === 'null' ? null : +key;
+      // Ancho total del grupo
+      const totalW = grp.reduce((s, un) => s + unitW(un), 0) + GAP * (grp.length - 1);
+      // Posición inicial: centrada en el ancla, o en el cursor si no hay ancla
+      let startX;
+      if (anchor === null) {
+        startX = c;
+      } else {
+        // Centrar el grupo en el ancla (permitir que se extienda a la izquierda;
+        // el centrado global al final lo ajusta)
+        startX = anchor - totalW / 2;
+        // Solo evitar solape si hay grupos previos
+        if (c > 0) startX = Math.max(c, startX);
+      }
+      grp.forEach(un => {
+        const w = unitW(un);
+        un.x = startX + w / 2;
+        startX += w + GAP;
+      });
+      c = startX;
+    }
+    // Resolver solapes entre grupos adyacentes (empujar a la derecha si es necesario)
+    for (let i = 1; i < arr.length; i++) {
+      const prev = arr[i - 1], cur = arr[i];
+      const minX = prev.x + unitW(prev) / 2 + GAP + unitW(cur) / 2;
+      if (cur.x < minX) {
+        const diff = minX - cur.x;
+        // Empujar este y todos los siguientes del mismo grupo
+        arr.slice(i).forEach(u => { u.x += diff; });
       }
     }
   }
