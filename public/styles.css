@@ -645,7 +645,7 @@ input[type=file] { display: none; }
 /* Historias: marco más sutil */
 .story-tree { width: 84px; }
 .tree-frame-wrap { width: 76px; height: 76px; }
-.tree-frame-wrap .tf-photo { width: 58px; height: 58px; }
+.tree-frame-wrap .tf-photo { width: 64px; height: 64px; }
 .story-tree .sname { max-width: 84px; }
 
 /* Chat: bloquear zoom con gestos */
