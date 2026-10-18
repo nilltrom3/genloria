@@ -116,7 +116,9 @@ async function requestPushPermission(silent) {
     // Si la clave del servidor cambió desde la última suscripción, re-suscribir
     const storedKey = localStorage.getItem('genloria_vapid_key') || '';
     let sub = await reg.pushManager.getSubscription().catch(() => null);
-    if (sub && storedKey && storedKey !== kd.publicKey) {
+    // Si no hay clave guardada o la clave cambió, la suscripción local es obsoleta:
+    // eliminarla y crear una nueva con la clave actual
+    if (sub && (!storedKey || storedKey !== kd.publicKey)) {
       await sub.unsubscribe().catch(() => {});
       sub = null;
     }
