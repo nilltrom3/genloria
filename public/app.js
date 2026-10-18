@@ -1825,14 +1825,31 @@ async function viewFamily() {
       ${avatarHTML(u)}<span class="grow">${coloredName(u)}${u.is_placeholder ? ' <span class="chip">SOLO ÁRBOL</span>' : ''}<small>${years}</small></span><span style="color:var(--muted)">›</span>
     </button>`;
   };
+  let familyName = 'Mi familia';
+  try { const { family } = await api('/api/auth/my-family'); familyName = family.name; } catch {}
+  const isAdmin = me && me.role === 'admin';
   app.innerHTML = `
     ${topbar('Familia')}
+    <div style="padding:16px 12px 0;text-align:center">
+      <h2 style="margin:0;display:inline-block">${esc(familyName)}</h2>
+      ${isAdmin ? `<button class="mini-btn" id="btn-famname" style="margin-left:8px" title="Cambiar nombre">✏️</button>` : ''}
+    </div>
     <div style="padding:12px 12px 0"><button class="btn" id="btn-invite" style="width:100%">✉️ Invitar a un familiar</button></div>
     <div style="padding:12px 12px 0"><input type="search" id="fam-q" placeholder="🔍 Buscar familiar…" style="margin:0"></div>
     <div class="card" style="padding:0;overflow:hidden" id="fam-list">
       ${users.map(row).join('')}
     </div>
     <p style="text-align:center;color:var(--muted);font-size:.85rem">${users.length} persona(s) en la familia</p>`;
+  const bfn = $('#btn-famname');
+  if (bfn) bfn.onclick = async () => {
+    const nuevo = prompt('Nombre de la familia:', familyName);
+    if (!nuevo || !nuevo.trim() || nuevo.trim() === familyName) return;
+    try {
+      const r = await api('/api/auth/my-family', { method: 'PUT', body: JSON.stringify({ name: nuevo.trim() }) });
+      toast('Nombre actualizado ✅');
+      location.reload();
+    } catch (e) { toast(e.message); }
+  };
   $('#btn-invite').onclick = async () => {
     try {
       const { family } = await api('/api/auth/my-family');

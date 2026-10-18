@@ -245,6 +245,17 @@ router.get('/my-family', requireAuth, (req, res) => {
   res.json({ family: { ...family, memberCount } });
 });
 
+// Actualizar el nombre de la familia (solo admin)
+router.put('/my-family', requireAuth, (req, res) => {
+  const me = db.prepare('SELECT id, role, family_id FROM users WHERE id = ?').get(req.session.userId);
+  if (!me || me.role !== 'admin') return res.status(403).json({ error: 'Solo el administrador puede cambiar el nombre.' });
+  const name = (req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Escribe un nombre para la familia.' });
+  if (name.length > 60) return res.status(400).json({ error: 'El nombre es muy largo (máx. 60 caracteres).' });
+  db.prepare('UPDATE families SET name = ? WHERE id = ?').run(name, me.family_id);
+  res.json({ ok: true, name });
+});
+
 // Clave pública VAPID para suscribirse a push
 router.get('/push-key', (req, res) => {
   const { getVapidPublicKey } = require('../push');
