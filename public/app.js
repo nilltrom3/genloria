@@ -127,6 +127,29 @@ async function compressFormImages(fd, maxDim, quality) {
   return fd;
 }
 
+// Verifica que los videos no excedan 3 minutos (para cuidar el almacenamiento)
+function checkVideoDuration(fd) {
+  return new Promise((resolve, reject) => {
+    for (const key of [...fd.keys()]) {
+      const v = fd.get(key);
+      if (v instanceof File && v.type.startsWith('video/')) {
+        const url = URL.createObjectURL(v);
+        const vid = document.createElement('video');
+        vid.preload = 'metadata';
+        vid.onloadedmetadata = () => {
+          URL.revokeObjectURL(url);
+          if (vid.duration > 180) reject(new Error('El video no puede durar más de 3 minutos.'));
+          else resolve();
+        };
+        vid.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+        vid.src = url;
+        return;
+      }
+    }
+    resolve();
+  });
+}
+
 function avatarHTML(user, cls) {
   const src = user && user.avatar_path ? esc(user.avatar_path) : '/icons/avatar-default.svg';
   return `<img class="${cls || 'avatar'}" src="${src}" alt="avatar" onerror="this.src='/icons/avatar-default.svg'">`;
@@ -700,6 +723,7 @@ function renderFeed() {
       fd.append('media', input.files[0]);
       try {
         toast('Subiendo historia…');
+        await checkVideoDuration(fd);
         await compressFormImages(fd, 1280, 0.82);
         await apiForm('/api/stories', fd);
         toast('¡Historia publicada! ✨');
@@ -887,6 +911,7 @@ function viewNew() {
     }
     try {
       toast('Publicando…');
+      await checkVideoDuration(fd);
       await compressFormImages(fd, 1600, 0.82);
       await apiForm('/api/posts', fd);
       toast('¡Publicado! 🎉');
