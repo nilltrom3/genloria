@@ -1633,6 +1633,7 @@ function personViewHTML(person, t, isAdmin) {
       </div>
     </div>
     <div style="display:flex;gap:10px;padding:0 20px 20px">
+      <button class="btn secondary" id="pv-print" style="margin-top:0">🖨️ Imprimir</button>
       ${(isAdmin || person.id === (me && me.id)) ? `<button class="btn" id="pv-edit" style="margin-top:0">✏️ Editar ficha</button>` : `<button class="btn secondary" id="pv-suggest" style="margin-top:0">Proponer corrección</button>`}
       <button class="btn secondary" id="pv-close" style="margin-top:0">Cerrar</button>
     </div>
@@ -1641,6 +1642,14 @@ function personViewHTML(person, t, isAdmin) {
 
 function wirePersonView(person, t, isAdmin) {
   $('#pv-close').onclick = closeSheet;
+  $('#pv-print').onclick = () => {
+    const a = document.createElement('a');
+    a.href = `/api/export/person/${person.id}.pdf`;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
   const ed = $('#pv-edit');
   if (ed) ed.onclick = () => openPersonSheet(person.id, 'edit');
   const sg = $('#pv-suggest');

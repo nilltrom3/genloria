@@ -307,6 +307,114 @@ router.get('/family.pdf', requireAuth, (req, res) => {
   doc.end();
 });
 
+
+// ---- PDF de ficha personal ----
+router.get('/person/:id.pdf', requireAuth, (req, res) => {
+  const { users, byId, parents, couples } = collectFamily();
+  const person = byId[req.params.id];
+  if (!person) return res.status(404).json({ error: 'Persona no encontrada.' });
+
+  const doc = new PDFDocument({ margin: 0, size: 'LETTER' });
+  res.setHeader('Content-Type', 'application/pdf');
+  const fname = (person.name || 'ficha').replace(/[^a-zA-Z0-9áéíóúñü ]/gi, '').trim().replace(/\s+/g, '-');
+  res.setHeader('Content-Disposition', `attachment; filename="genloria-ficha-${fname}.pdf"`);
+  doc.pipe(res);
+
+  const NAVY = '#0b2b4f', GOLD = '#d4a017', GREEN = '#2e7d32', GRAY = '#616161', DARK = '#1a1a1a';
+  const PW = 612, M = 48;
+  const now = new Date();
+
+  // Encabezado
+  const headerH = 150;
+  doc.rect(0, 0, PW, headerH).fill(NAVY);
+  doc.rect(0, headerH - 4, PW, 4).fill(GOLD);
+  const logoPath = path.join(__dirname, '..', 'public', 'logo-genloria.png');
+  let lx = M;
+  if (fs.existsSync(logoPath)) { doc.image(logoPath, M, 28, { fit: [70, 70] }); lx = M + 86; }
+  doc.fontSize(26).fillColor('#ffffff').font('Helvetica-Bold').text('GENLORIA', lx, 38);
+  doc.fontSize(10).fillColor('#c5d3e8').font('Helvetica-Oblique')
+    .text('Generaciones unidas. Historias que perduran.', lx, 68);
+  doc.strokeColor(GOLD).lineWidth(1.5).moveTo(lx, 88).lineTo(lx + 220, 88).stroke();
+  doc.fontSize(8).fillColor(GOLD).font('Helvetica-Bold').text('FICHA PERSONAL', lx, 96);
+  doc.fontSize(14).fillColor('#ffffff').font('Helvetica-Bold').text(person.name, lx, 108);
+
+  let y = headerH + 20;
+
+  // Foto si existe
+  const avatarPath = person.avatar_path ? path.join(__dirname, '..', 'public', person.avatar_path.replace(/^\//, '')) : null;
+  if (avatarPath && fs.existsSync(avatarPath)) {
+    try {
+      doc.image(avatarPath, PW - M - 90, headerH + 20, { fit: [90, 90] });
+    } catch (e) { /* ignorar */ }
+  }
+
+  const section = (t, yy) => {
+    doc.fontSize(13).fillColor(NAVY).font('Helvetica-Bold').text(t, M, yy);
+    const ty = yy + 20;
+    doc.strokeColor(GOLD).lineWidth(3).moveTo(M, ty).lineTo(M + 28, ty).stroke();
+    return ty + 14;
+  };
+
+  const kv = (k, v) => {
+    if (!v) return;
+    doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text(k + ': ', M, y, { continued: true })
+      .font('Helvetica').text(String(v));
+    y += 15;
+  };
+
+  const fmtD = d => {
+    if (!d) return '';
+    try { return new Date(d + 'T12:00:00').toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+    catch (e) { return d; }
+  };
+
+  // Información personal
+  y = section('Información personal', y);
+  if (person.nickname) kv('Apodo', `«${person.nickname}»`);
+  if (person.maiden_name) kv('Apellido de soltera', person.maiden_name);
+  if (person.sex) kv('Sexo', { M: 'Hombre', F: 'Mujer', X: 'Otro' }[person.sex] || person.sex);
+  kv('Nacimiento', [fmtD(person.birthdate), person.birth_place].filter(Boolean).join(' — '));
+  kv('Bautismo', [fmtD(person.baptism_date), person.baptism_place].filter(Boolean).join(' — '));
+  if (person.is_deceased) {
+    kv('Fallecimiento', [fmtD(person.death_date), person.death_place].filter(Boolean).join(' — '));
+    kv('Causa', person.death_cause);
+    kv('Entierro', person.burial_place);
+  }
+  kv('Teléfono', person.phone);
+  if (person.bio) kv('Sobre esta persona', person.bio);
+  kv('Ocupación', person.occupation);
+  kv('Educación', person.education);
+  kv('Religión', person.religion);
+  kv('Nacionalidad', person.nationality);
+  kv('Residencia', person.residence);
+  kv('Servicio militar', person.military_service);
+  if (person.notes) kv('Notas y fuentes', person.notes);
+  if (person.username) kv('Cuenta GENLORIA', 'Tiene su propia cuenta');
+  y += 10;
+
+  // Familia
+  y = section('Familia', y);
+  const ps = (parents[person.id] || []).filter(p => p.link_set === 1).map(p => byId[p.id]).filter(Boolean);
+  if (ps.length) kv('Padres', ps.map(p => p.name).join(', '));
+  const cpl = couples.find(c => c.status === 'actual' && (c.user1_id === person.id || c.user2_id === person.id));
+  if (cpl) {
+    const other = byId[cpl.user1_id === person.id ? cpl.user2_id : cpl.user1_id];
+    if (other) kv('Pareja', other.name + (cpl.marriage_date ? ` (matr. ${fmtD(cpl.marriage_date)})` : ''));
+  }
+  const kids = [];
+  for (const [cid, cps] of Object.entries(parents)) {
+    if (cps.some(p => p.id === person.id && p.link_set === 1) && byId[cid]) kids.push(byId[cid].name);
+  }
+  if (kids.length) kv('Hijos', [...new Set(kids)].join(', '));
+
+  // Pie
+  doc.fontSize(7).fillColor('#9aa3b2').font('Helvetica')
+    .text('GENLORIA · Generaciones unidas. Historias que perduran.', M, 752);
+  doc.text(`Generado el ${now.toLocaleDateString('es')}`, PW - M - 150, 752, { width: 150, align: 'right' });
+
+  doc.end();
+});
+
 // ---- GEDCOM 5.5.1 ----
 router.get('/family.gedcom', requireAuth, (req, res) => {
   const { users, byId, parents, couples } = collectFamily();
