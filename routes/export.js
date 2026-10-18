@@ -64,6 +64,9 @@ const genLabel = i => GEN_LABEL[i] || `Generación ${i + 1}`;
 // Reemplazo completo de la ruta /family.pdf con el diseño acordado
 router.get('/family.pdf', requireAuth, (req, res) => {
   const { users, byId, parents, couples } = collectFamily();
+  const meRow = db.prepare('SELECT family_id FROM users WHERE id = ?').get(req.session.userId);
+  const famRow = meRow && meRow.family_id
+    ? db.prepare('SELECT name FROM families WHERE id = ?').get(meRow.family_id) : null;
   const gens = generations(users, parents);
   const doc = new PDFDocument({ margin: 0, size: 'LETTER' });
   res.setHeader('Content-Type', 'application/pdf');
@@ -75,7 +78,7 @@ router.get('/family.pdf', requireAuth, (req, res) => {
   const PW = 612; // LETTER width
   const M = 48;   // margin
 
-  const familyName = users.length ? 'Mi familia' : 'Mi familia';
+  const familyName = (famRow && famRow.name) || 'Mi familia';
   const now = new Date();
   const dateStr = now.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }) +
     ' · ' + now.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' });
