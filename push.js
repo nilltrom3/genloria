@@ -32,9 +32,11 @@ async function sendPushToUser(userId, payload) {
       console.log(`[push] Enviado a usuario ${userId} (${s.endpoint.slice(0,50)}...)`);
     } catch (e) {
       console.log(`[push] Error enviando a usuario ${userId}: ${e.statusCode} ${e.message}`);
-      // Suscripción inválida/expirada → eliminarla
-      if (e.statusCode === 404 || e.statusCode === 410) {
+      // Suscripción inválida/expirada o clave VAPID desactualizada → eliminarla
+      // (el cliente se re-suscribe solo al abrir la app)
+      if (e.statusCode === 404 || e.statusCode === 410 || e.statusCode === 403) {
         db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(s.id);
+        console.log(`[push] Suscripción obsoleta eliminada (usuario ${userId})`);
       }
     }
   }

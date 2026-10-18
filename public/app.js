@@ -77,6 +77,92 @@ async function api(path, opts = {}) {
   return data;
 }
 
+// Convierte clave VAPID base64url a Uint8Array
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const out = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) out[i] = rawData.charCodeAt(i);
+  return out;
+}
+function bufToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+// Pide permiso y suscribe el dispositivo a notificaciones push
+async function requestPushPermission(silent) {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      if (!silent) toast('Tu dispositivo no soporta notificaciones');
+      return false;
+    }
+    let perm = Notification.permission;
+    if (perm === 'default') perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      if (!silent) toast('Activa el permiso de notificaciones para recibir avisos');
+      return false;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    // Clave pública actual del servidor
+    const kd = await api('/api/auth/push-key').catch(() => ({}));
+    if (!kd.publicKey) {
+      if (!silent) toast('Notificaciones no disponibles por ahora');
+      return false;
+    }
+    // Si la clave del servidor cambió desde la última suscripción, re-suscribir
+    const storedKey = localStorage.getItem('genloria_vapid_key') || '';
+    let sub = await reg.pushManager.getSubscription().catch(() => null);
+    if (sub && storedKey && storedKey !== kd.publicKey) {
+      await sub.unsubscribe().catch(() => {});
+      sub = null;
+    }
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(kd.publicKey)
+      });
+    }
+    // Guardar suscripción en el servidor
+    await api('/api/auth/push-subscribe', {
+      method: 'POST',
+      body: JSON.stringify({
+        endpoint: sub.endpoint,
+        p256dh: bufToBase64(sub.getKey('p256dh')),
+        auth: bufToBase64(sub.getKey('auth'))
+      })
+    });
+    localStorage.setItem('genloria_vapid_key', kd.publicKey);
+    if (!silent) toast('Notificaciones activadas 🔔');
+    return true;
+  } catch (e) {
+    console.warn('[push]', e);
+    if (!silent) toast('No se pudieron activar las notificaciones');
+    return false;
+  }
+}
+
+// Verifica al iniciar sesión: si el permiso está dado pero no hay suscripción válida, suscribir en silencio
+async function ensurePushSubscription() {
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    if (!me || !me.id) return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription().catch(() => null);
+    const kd = await api('/api/auth/push-key').catch(() => ({}));
+    const storedKey = localStorage.getItem('genloria_vapid_key') || '';
+    const st = await api('/api/auth/push-status').catch(() => ({}));
+    // Re-suscribir si: no hay suscripción local, la clave cambió, o el servidor no tiene registro
+    if (!sub || (storedKey && kd.publicKey && storedKey !== kd.publicKey) || !st.subscribed) {
+      await requestPushPermission(true);
+    }
+  } catch {}
+}
+
 async function apiForm(path, formData, method = 'POST') {
   const res = await fetch(path, { method, credentials: 'same-origin', body: formData });
   const data = await res.json().catch(() => ({}));
@@ -378,6 +464,7 @@ function viewLogin() {
       });
       me = user;
       location.hash = '#/feed';
+      ensurePushSubscription();
     } catch (err) {
       $('#err').textContent = err.message;
     }
@@ -1233,6 +1320,7 @@ async function viewProfile(username) {
               });
               await sub.unsubscribe();
             }
+            localStorage.removeItem('genloria_vapid_key');
             toast('Notificaciones desactivadas');
           } catch (e) { toast('Error al desactivar'); }
         } else {
@@ -2448,6 +2536,7 @@ async function boot() {
   try {
     const { user } = await api('/api/auth/me');
     me = user;
+    if (me) ensurePushSubscription();
   } catch { me = null; }
 
   async function route() {
