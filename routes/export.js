@@ -61,107 +61,249 @@ const GEN_LABEL = ['Primera generación', 'Segunda generación', 'Tercera genera
   'Cuarta generación', 'Quinta generación', 'Sexta generación'];
 const genLabel = i => GEN_LABEL[i] || `Generación ${i + 1}`;
 
-// ---- PDF familiar ----
+// Reemplazo completo de la ruta /family.pdf con el diseño acordado
 router.get('/family.pdf', requireAuth, (req, res) => {
   const { users, byId, parents, couples } = collectFamily();
   const gens = generations(users, parents);
-  const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+  const doc = new PDFDocument({ margin: 0, size: 'LETTER' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="genloria-datos-familiares.pdf"');
   doc.pipe(res);
 
-  const NAVY = '#0b2b4f', BLUE = '#2b7cd3', GOLD = '#b8912a', GREEN = '#2e7d32', GRAY = '#616161';
+  const NAVY = '#0b2b4f', GOLD = '#d4a017', GREEN = '#2e7d32', GRAY = '#616161', DARK = '#1a1a1a';
+  const PW = 612; // LETTER width
+  const M = 48;   // margin
 
-  // Portada
+  const familyName = users.length ? 'Mi familia' : 'Mi familia';
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }) +
+    ' · ' + now.toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' });
+
+  // ---------- Portada / encabezado ----------
+  const headerH = 150;
+  doc.rect(0, 0, PW, headerH).fill(NAVY);
+  // Línea dorada inferior
+  doc.rect(0, headerH - 4, PW, 4).fill(GOLD);
+
+  // Logo (árbol) a la izquierda
   const logoPath = path.join(__dirname, '..', 'public', 'logo-genloria.png');
-  if (fs.existsSync(logoPath)) doc.image(logoPath, { fit: [140, 140], align: 'center' });
-  doc.moveDown(1.5);
-  doc.fontSize(30).fillColor(NAVY).font('Helvetica-Bold').text('GENLORIA', { align: 'center' });
-  doc.moveDown(0.4);
-  doc.fontSize(13).fillColor(GRAY).font('Helvetica-Oblique')
-    .text('Generaciones unidas. Historias que perduran.', { align: 'center' });
-  doc.moveDown(1.2);
-  doc.fontSize(12).fillColor('#333').font('Helvetica')
-    .text(`Datos familiares — ${users.length} persona(s) en ${gens.length} generación(es).`, { align: 'center' });
-  const living = users.filter(u => !u.is_deceased).length;
-  doc.text(`${living} con vida · ${users.length - living} fallecidos.`, { align: 'center' });
-  doc.moveDown(0.6);
-  doc.fontSize(10).fillColor(GRAY)
-    .text(`Generado el ${new Date().toLocaleDateString('es')} desde GENLORIA.`, { align: 'center' });
+  let lx = M;
+  if (fs.existsSync(logoPath)) {
+    doc.image(logoPath, M, 28, { fit: [70, 70] });
+    lx = M + 86;
+  }
+  doc.fontSize(26).fillColor('#ffffff').font('Helvetica-Bold').text('GENLORIA', lx, 38);
+  doc.fontSize(10).fillColor('#c5d3e8').font('Helvetica-Oblique')
+    .text('Generaciones unidas. Historias que perduran.', lx, 68);
+  // Línea dorada corta
+  doc.strokeColor(GOLD).lineWidth(1.5).moveTo(lx, 88).lineTo(lx + 220, 88).stroke();
+  doc.fontSize(8).fillColor(GOLD).font('Helvetica-Bold').text('FAMILIA', lx, 96);
+  doc.fontSize(14).fillColor('#ffffff').font('Helvetica-Bold').text(familyName, lx, 108);
 
-  // Datos por generación
-  const personBlock = u => {
-    const y = years(u);
-    doc.fontSize(14).fillColor(u.is_deceased ? GRAY : NAVY).font('Helvetica-Bold')
-      .text(`${fullName(u)}${y ? '  ' + y : ''}`);
-    const small = [];
-    if (u.nickname) small.push(`«${u.nickname}»`);
-    if (u.maiden_name) small.push(`nacida como ${u.maiden_name}`);
-    if (u.sex) small.push({ M: 'Hombre', F: 'Mujer', X: 'Otro' }[u.sex] || u.sex);
-    const ps = (parents[u.id] || []).filter(p => p.link_set === 1).map(p => byId[p.id]).filter(Boolean);
-    if (ps.length) small.push(`Padre/madre: ${ps.map(p => p.name).join(', ')}`);
+  let y = headerH + 24;
+
+  // Fecha de exportación
+  doc.fontSize(8).fillColor(GRAY).font('Helvetica')
+    .text(`Datos familiares exportados el ${dateStr}.`, M, y, { width: PW - M * 2 });
+  y += 22;
+
+  // ---------- Resumen de la familia ----------
+  doc.fontSize(13).fillColor(NAVY).font('Helvetica-Bold').text('Resumen de la familia', M, y);
+  y += 6;
+  // Rayita dorada
+  doc.strokeColor(GOLD).lineWidth(3).moveTo(M, y).lineTo(M + 28, y).stroke();
+  y += 12;
+
+  const withAccount = users.filter(u => u.username).length;
+  const coupleCount = couples.filter(c => c.status === 'actual').length;
+  const stats = [
+    [String(users.length), 'FAMILIARES'],
+    [String(gens.length), 'GENERACIONES'],
+    [String(withAccount), 'CON CUENTA'],
+    [String(coupleCount), 'PAREJAS'],
+  ];
+  const cardW = (PW - M * 2 - 24) / 4, cardH = 58;
+  stats.forEach(([num, label], i) => {
+    const x = M + i * (cardW + 8);
+    doc.roundedRect(x, y, cardW, cardH, 8).fill('#eef1f6');
+    doc.fontSize(20).fillColor(NAVY).font('Helvetica-Bold')
+      .text(num, x, y + 8, { width: cardW, align: 'center' });
+    doc.fontSize(7).fillColor(GRAY).font('Helvetica')
+      .text(label, x, y + 36, { width: cardW, align: 'center' });
+  });
+  y += cardH + 26;
+
+  // ---------- Miembros de la familia ----------
+  const sectionTitle = (t, yy) => {
+    doc.fontSize(13).fillColor(NAVY).font('Helvetica-Bold').text(t, M, yy);
+    const ty = yy + 20;
+    doc.strokeColor(GOLD).lineWidth(3).moveTo(M, ty).lineTo(M + 28, ty).stroke();
+    return ty + 14;
+  };
+  y = sectionTitle('Miembros de la familia', y);
+
+  const needSpace = h => {
+    if (y + h > 740) { addFooter(); doc.addPage(); y = 40; }
+  };
+  const addFooter = () => {
+    doc.fontSize(7).fillColor('#9aa3b2').font('Helvetica')
+      .text('GENLORIA · Generaciones unidas. Historias que perduran.', M, 752);
+    const pg = doc.bufferedPageRange().count + 1;
+    doc.text(`Página ${pg}`, PW - M - 60, 752, { width: 60, align: 'right' });
+  };
+
+  const ageStr = u => {
+    if (!u.birthdate) return '';
+    const b = new Date(u.birthdate);
+    let age = now.getFullYear() - b.getFullYear();
+    const m = now.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+    const ds = b.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+    return `${ds} (${age} años)`;
+  };
+
+  // Rol/título de cada persona
+  const roleOf = u => {
+    const hasParents = (parents[u.id] || []).length > 0;
+    if (!hasParents) return 'Raíz de la familia';
+    const cpl = couples.find(c => c.status === 'actual' && (c.user1_id === u.id || c.user2_id === u.id));
+    if (cpl) return 'Pareja';
+    return 'Hijo/a';
+  };
+
+  // Orden: por generación
+  const ordered = gens.flat();
+
+  for (const u of ordered) {
+    needSpace(90);
+    // Nombre
+    doc.fontSize(12).fillColor(DARK).font('Helvetica-Bold').text(u.name, M, y);
+    y += 16;
+    // Rol en verde
+    doc.fontSize(9).fillColor(GREEN).font('Helvetica').text(roleOf(u), M, y);
+    y += 14;
+
+    const lines = [];
     const cpl = couples.find(c => c.status === 'actual' && (c.user1_id === u.id || c.user2_id === u.id));
     if (cpl) {
       const other = byId[cpl.user1_id === u.id ? cpl.user2_id : cpl.user1_id];
-      if (other) small.push(`Pareja: ${other.name}${cpl.marriage_date ? ` (matr. ${cpl.marriage_date})` : ''}`);
+      if (other) lines.push(['Pareja', other.name]);
     }
-    if (small.length) doc.fontSize(9).fillColor(GRAY).font('Helvetica').text(small.join(' · '));
-    const det = [];
-    const kv = (k, v) => { if (v) det.push([k, v]); };
-    kv('Nacimiento', [u.birthdate, u.birth_place].filter(Boolean).join(' — '));
-    kv('Bautismo', [u.baptism_date, u.baptism_place].filter(Boolean).join(' — '));
-    if (u.is_deceased) {
-      kv('Fallecimiento', [u.death_date, u.death_place].filter(Boolean).join(' — '));
-      kv('Causa', u.death_cause);
-      kv('Entierro', u.burial_place);
+    if (u.birthdate) lines.push(['Nacimiento', ageStr(u)]);
+    // Hijos
+    const kids = [];
+    for (const [cid, ps] of Object.entries(parents)) {
+      if (ps.some(p => p.id === u.id && p.link_set === 1) && byId[cid]) kids.push(byId[cid].name.split(' ')[0]);
     }
-    kv('Teléfono', u.phone);
-    kv('Ocupación', u.occupation);
-    kv('Educación', u.education);
-    kv('Religión', u.religion);
-    kv('Nacionalidad', u.nationality);
-    kv('Residencia', u.residence);
-    kv('Servicio militar', u.military_service);
-    if (u.bio) kv('Sobre esta persona', u.bio);
-    if (u.notes) kv('Notas y fuentes', u.notes);
-    for (const [k, v] of det) {
-      doc.fontSize(10).fillColor('#333').font('Helvetica-Bold').text(k + ': ', { continued: true })
+    if (kids.length) lines.push(['Hijos', [...new Set(kids)].join(', ')]);
+    // Padres
+    const ps = (parents[u.id] || []).filter(p => p.link_set === 1).map(p => byId[p.id]).filter(Boolean);
+    if (ps.length >= 1) lines.push(['Padre', ps[0].name.split(' ')[0]]);
+    if (ps.length >= 2) lines.push(['Madre', ps[1].name.split(' ')[0]]);
+    if (u.username) lines.push(['Cuenta GENLORIA', 'Tiene su propia cuenta']);
+
+    for (const [k, v] of lines) {
+      doc.fontSize(9).fillColor(DARK).font('Helvetica-Bold').text(k + ': ', M, y, { continued: true })
         .font('Helvetica').text(v);
+      y += 13;
     }
-    doc.moveDown(0.8);
+    y += 6;
+    // Separador
+    doc.strokeColor('#e0e4ea').lineWidth(0.7).moveTo(M, y).lineTo(PW - M, y).stroke();
+    y += 14;
+  }
+
+  // ---------- Árbol genealógico (diagrama) ----------
+  addFooter();
+  doc.addPage();
+  y = 40;
+  // Mini encabezado
+  doc.rect(0, 0, PW, 46).fill(NAVY);
+  doc.rect(0, 42, PW, 4).fill(GOLD);
+  doc.fontSize(11).fillColor('#fff').font('Helvetica-Bold').text('GENLORIA', M, 14);
+  doc.fontSize(8).fillColor('#c5d3e8').font('Helvetica').text(familyName, PW - M - 120, 16, { width: 120, align: 'right' });
+  y = 70;
+  y = sectionTitle('Árbol genealógico', y);
+  doc.fontSize(9).fillColor(GRAY).font('Helvetica')
+    .text(`Familia ${familyName} · ${users.length} familiares`, M, y);
+  y += 30;
+
+  // Dibujar árbol simple por generaciones
+  const drawTree = (startY) => {
+    let cy = startY;
+    const nodeR = 22;
+    const levelGap = 95;
+    // Por cada generación, dibujar nodos en fila
+    const positions = {}; // id -> {x, y}
+    gens.forEach((g, gi) => {
+      const n = g.length;
+      if (!n) return;
+      const totalW = PW - M * 2;
+      const stepX = n === 1 ? 0 : Math.min(130, totalW / n);
+      const rowW = stepX * (n - 1);
+      const x0 = (PW - rowW) / 2;
+      g.forEach((u, i) => {
+        const x = n === 1 ? PW / 2 : x0 + i * stepX;
+        const yy = cy;
+        positions[u.id] = { x, y: yy };
+        // Círculo
+        doc.circle(x, yy, nodeR).fillOpacity(1).fill('#eef3f8');
+        doc.circle(x, yy, nodeR).strokeColor(GREEN).lineWidth(2).stroke();
+        // Inicial
+        const initial = (u.name || '?').trim().charAt(0).toUpperCase();
+        doc.fontSize(16).fillColor(NAVY).font('Helvetica-Bold')
+          .text(initial, x - nodeR, yy - 11, { width: nodeR * 2, align: 'center' });
+        // Nombre debajo
+        const first = u.name.split(' ')[0];
+        doc.fontSize(8).fillColor(NAVY).font('Helvetica-Bold')
+          .text(first, x - 45, yy + nodeR + 4, { width: 90, align: 'center' });
+        doc.fontSize(7).fillColor(GREEN).font('Helvetica')
+          .text(roleOf(u), x - 45, yy + nodeR + 16, { width: 90, align: 'center' });
+      });
+      cy += levelGap;
+    });
+    // Conexiones pareja (línea dorada)
+    doc.strokeColor(GOLD).lineWidth(2.5);
+    for (const c of couples) {
+      if (c.status !== 'actual') continue;
+      const a = positions[c.user1_id], b = positions[c.user2_id];
+      if (a && b && Math.abs(a.y - b.y) < 5) {
+        doc.moveTo(a.x + nodeR, a.y).lineTo(b.x - nodeR, b.y).stroke();
+      }
+    }
+    // Conexiones padres-hijos (línea gris)
+    doc.strokeColor('#9aa3b2').lineWidth(1.2);
+    for (const [cid, ps] of Object.entries(parents)) {
+      const child = positions[cid];
+      if (!child) continue;
+      const set1 = ps.filter(p => p.link_set === 1 && positions[p.id]);
+      if (!set1.length) continue;
+      // Punto medio de los padres
+      const pxs = set1.map(p => positions[p.id].x);
+      const pys = set1.map(p => positions[p.id].y);
+      const midX = pxs.reduce((s, v) => s + v, 0) / pxs.length;
+      const parY = pys[0];
+      if (child.y > parY + 10) {
+        const dropY = parY + 40;
+        doc.moveTo(midX, parY + nodeR).lineTo(midX, dropY).stroke();
+        doc.moveTo(Math.min(midX, child.x), dropY).lineTo(Math.max(midX, child.x), dropY).stroke();
+        doc.moveTo(child.x, dropY).lineTo(child.x, child.y - nodeR).stroke();
+      }
+    }
+    return cy;
   };
 
-  gens.forEach((g, i) => {
-    doc.addPage();
-    doc.fontSize(18).fillColor(BLUE).font('Helvetica-Bold').text(genLabel(i));
-    doc.moveDown(0.3);
-    doc.strokeColor('#d0d7e3').lineWidth(1)
-      .moveTo(50, doc.y).lineTo(562, doc.y).stroke();
-    doc.moveDown(0.8);
-    g.forEach(personBlock);
-  });
+  drawTree(y);
 
-  // Última página: árbol por generaciones
-  doc.addPage();
-  doc.fontSize(18).fillColor(BLUE).font('Helvetica-Bold').text('Árbol familiar');
-  doc.moveDown(0.5);
-  gens.forEach((g, i) => {
-    doc.fontSize(12).fillColor(GOLD).font('Helvetica-Bold').text(genLabel(i));
-    doc.moveDown(0.2);
-    g.forEach(u => {
-      const ps = (parents[u.id] || []).filter(p => p.link_set === 1).map(p => byId[p.id]).filter(Boolean);
-      const cpl = couples.find(c => c.status === 'actual' && (c.user1_id === u.id || c.user2_id === u.id));
-      const other = cpl ? byId[cpl.user1_id === u.id ? cpl.user2_id : cpl.user1_id] : null;
-      doc.fontSize(10).fillColor('#222').font('Helvetica')
-        .text(`• ${fullName(u)}${years(u) ? ' ' + years(u) : ''}`, { continued: false });
-      const sub = [];
-      if (ps.length) sub.push(`Padre/madre: ${ps.map(p => p.name).join(', ')}`);
-      if (other) sub.push(`Pareja: ${other.name}`);
-      if (sub.length) doc.fontSize(8).fillColor(GRAY).text('   ' + sub.join(' · '));
-    });
-    doc.moveDown(0.6);
-  });
+  // Leyenda
+  const ly = 700;
+  doc.strokeColor(GOLD).lineWidth(2.5).moveTo(M, ly).lineTo(M + 28, ly).stroke();
+  doc.fontSize(8).fillColor(GRAY).font('Helvetica').text('Pareja', M + 34, ly - 6);
+  doc.strokeColor('#9aa3b2').lineWidth(1.2).dash(3, { space: 3 }).moveTo(M + 110, ly).lineTo(M + 138, ly).stroke();
+  doc.undash();
+  doc.fontSize(8).fillColor(GRAY).text('Vínculo adoptivo o de acogida', M + 144, ly - 6);
 
+  addFooter();
   doc.end();
 });
 
