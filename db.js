@@ -149,9 +149,20 @@ try {
     db.prepare('UPDATE users SET family_id = ? WHERE family_id IS NULL').run(fid);
     db.prepare('UPDATE invite_codes SET family_id = ? WHERE family_id IS NULL').run(fid);
     // Posts y stories heredan la familia de su autor
-    db.prepare(`UPDATE posts SET family_id = (SELECT family_id FROM users WHERE users.id = posts.author_id) WHERE family_id IS NULL`).run();
-    db.prepare(`UPDATE stories SET family_id = (SELECT family_id FROM users WHERE users.id = stories.author_id) WHERE family_id IS NULL`).run();
+    db.prepare(`UPDATE posts SET family_id = (SELECT family_id FROM users WHERE users.id = posts.user_id) WHERE family_id IS NULL`).run();
+    db.prepare(`UPDATE stories SET family_id = (SELECT family_id FROM users WHERE users.id = stories.user_id) WHERE family_id IS NULL`).run();
     console.log(`[db] Familia por defecto creada (id=${fid}, código=${code}).`);
+  }
+  // Reparación: posts/stories con family_id NULL (migración anterior usó columna incorrecta)
+  const nullPosts = db.prepare('SELECT COUNT(*) c FROM posts WHERE family_id IS NULL').get().c;
+  if (nullPosts > 0) {
+    db.prepare(`UPDATE posts SET family_id = (SELECT family_id FROM users WHERE users.id = posts.user_id) WHERE family_id IS NULL`).run();
+    console.log(`[db] Reparados ${nullPosts} posts sin familia.`);
+  }
+  const nullStories = db.prepare('SELECT COUNT(*) c FROM stories WHERE family_id IS NULL').get().c;
+  if (nullStories > 0) {
+    db.prepare(`UPDATE stories SET family_id = (SELECT family_id FROM users WHERE users.id = stories.user_id) WHERE family_id IS NULL`).run();
+    console.log(`[db] Reparadas ${nullStories} historias sin familia.`);
   }
 } catch (e) { console.error('[db] Error migración multi-familia:', e.message); }
 if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'is_deceased')) {
