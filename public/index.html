@@ -4,7 +4,7 @@
 <script>
 // Forzador de actualización: si la versión del servidor es mayor, limpia caché y recarga
 (function() {
-  var CV = 39;
+  var CV = 40;
   try {
     var sv = parseInt(localStorage.getItem('genloria_v') || '0', 10);
     fetch('/api/version', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(d) {
@@ -45,7 +45,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="GENLORIA">
-<link rel="stylesheet" href="/styles.css?v=37">
+<link rel="stylesheet" href="/styles.css?v=40">
 </head>
 <body>
 <div id="app"></div>
@@ -61,7 +61,7 @@
 <div id="sheet" class="hidden"></div>
 <div id="toast" class="hidden"></div>
 <script src="/tree.js"></script>
-<script src="/app.js?v=37"></script>
+<script src="/app.js?v=40"></script>
 <script>
 if ('serviceWorker' in navigator) {
   let refreshing = false;

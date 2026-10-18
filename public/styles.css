@@ -246,7 +246,8 @@ input[type=file] { display: none; }
 /* Árbol genealógico */
 .tree-wrap { position: relative; }
 .tree-scroll { overflow: auto; background: var(--bg); border-radius: var(--radius); margin: 12px;
-  border: 1px solid var(--border); max-height: 62vh; }
+  border: 1px solid var(--border); max-height: 62vh; text-align: center; }
+.tree-scroll svg { display: inline-block; }
 .tree-zoom { position: sticky; top: 0; display: flex; gap: 8px; padding: 10px; z-index: 5;
   background: rgba(10,22,40,.92); }
 .tree-zoom button { background: var(--primary); color: #fff; border: 0; border-radius: 8px;
