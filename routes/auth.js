@@ -258,7 +258,15 @@ router.post('/push-subscribe', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Suscripción inválida.' });
   db.prepare(`INSERT OR REPLACE INTO push_subscriptions (user_id, endpoint, p256dh, auth)
               VALUES (?,?,?,?)`).run(req.session.userId, endpoint, p256dh, auth);
+  console.log(`[push] Suscripción guardada para usuario ${req.session.userId}`);
   res.json({ ok: true });
+});
+
+// Verificar estado de suscripción push
+router.get('/push-status', requireAuth, (req, res) => {
+  const count = db.prepare('SELECT COUNT(*) c FROM push_subscriptions WHERE user_id = ?')
+    .get(req.session.userId).c;
+  res.json({ subscribed: count > 0, count });
 });
 
 // Eliminar suscripción push (desactivar)

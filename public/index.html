@@ -107,7 +107,7 @@ async function requestPushPermission() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey)
       });
-      await fetch('/api/auth/push-subscribe', {
+      const saveRes = await fetch('/api/auth/push-subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,9 +116,15 @@ async function requestPushPermission() {
           auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth'))))
         })
       });
+      if (!saveRes.ok) throw new Error('No se pudo guardar la suscripción');
+      // Verificar que quedó guardada
+      const status = await fetch('/api/auth/push-status').then(r => r.json());
+      if (!status.subscribed) throw new Error('Suscripción no registrada');
       toast('Notificaciones activadas 🔔');
+    } else {
+      toast('Permiso de notificaciones denegado');
     }
-  } catch (e) { toast('No se pudieron activar las notificaciones'); }
+  } catch (e) { toast('No se pudieron activar las notificaciones: ' + e.message); }
 }
 </script>
 </body>

@@ -14,6 +14,10 @@ function getVapidPublicKey() {
 // Envía push a un usuario (todas sus suscripciones)
 async function sendPushToUser(userId, payload) {
   const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(userId);
+  if (!subs.length) {
+    console.log(`[push] Sin suscripciones para usuario ${userId}`);
+    return;
+  }
   const data = JSON.stringify(payload);
   for (const s of subs) {
     try {
@@ -21,7 +25,9 @@ async function sendPushToUser(userId, payload) {
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
         data
       );
+      console.log(`[push] Enviado a usuario ${userId} (${s.endpoint.slice(0,50)}...)`);
     } catch (e) {
+      console.log(`[push] Error enviando a usuario ${userId}: ${e.statusCode} ${e.message}`);
       // Suscripción inválida/expirada → eliminarla
       if (e.statusCode === 404 || e.statusCode === 410) {
         db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(s.id);
