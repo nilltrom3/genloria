@@ -1592,57 +1592,94 @@ function personViewHTML(person, t, isAdmin) {
   const r = relState(t, person.id);
   const byId = Object.fromEntries(t.users.map(u => [u.id, u]));
   const nm = id => byId[id] ? esc(byId[id].name) : '';
-  const rows = [];
-  const kv = (k, v) => { if (v) rows.push(`<p style="margin:6px 0"><strong>${k}:</strong> ${v}</p>`); };
-  if (person.nickname) kv('Apodo', `«${esc(person.nickname)}»`);
-  if (person.maiden_name) kv('Apellido de soltera', esc(person.maiden_name));
-  if (person.sex) kv('Sexo', { M: 'Hombre', F: 'Mujer', X: 'Otro' }[person.sex] || esc(person.sex));
-  kv('Nacimiento', [person.birthdate ? fmtDate(person.birthdate) : '', person.birth_place ? esc(person.birth_place) : ''].filter(Boolean).join(' — '));
-  kv('Bautismo', [person.baptism_date ? fmtDate(person.baptism_date) : '', person.baptism_place ? esc(person.baptism_place) : ''].filter(Boolean).join(' — '));
+  const y = (person.birthdate || '').slice(0, 4);
+  const avatar = person.avatar_path ? esc(person.avatar_path) : '/icons/avatar-default.svg';
+
+  // Filas de información personal con iconos
+  const infoRows = [];
+  const irow = (icon, label, value) => {
+    if (!value) return;
+    infoRows.push(`<div class="pv-row"><span class="pv-ic">${icon}</span><span class="pv-lab">${label}</span><span class="pv-val">${value}</span></div>`);
+  };
+  const fmtD = d => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch (e) { return d; } };
+  if (person.nickname) irow('🏷️', 'Apodo', `«${esc(person.nickname)}»`);
+  if (person.maiden_name) irow('🪪', 'Apellido de soltera', esc(person.maiden_name));
+  if (person.sex) irow('👤', 'Sexo', { M: 'Hombre', F: 'Mujer', X: 'Otro' }[person.sex] || esc(person.sex));
+  irow('📅', 'Nacimiento', [person.birthdate ? fmtD(person.birthdate) : '', person.birth_place ? esc(person.birth_place) : ''].filter(Boolean).join(' — '));
+  irow('💧', 'Bautismo', [person.baptism_date ? fmtD(person.baptism_date) : '', person.baptism_place ? esc(person.baptism_place) : ''].filter(Boolean).join(' — '));
   if (person.is_deceased) {
-    kv('Fallecimiento', [person.death_date ? fmtDate(person.death_date) : '', person.death_place ? esc(person.death_place) : ''].filter(Boolean).join(' — '));
-    kv('Causa', person.death_cause ? esc(person.death_cause) : '');
-    kv('Entierro', person.burial_place ? esc(person.burial_place) : '');
+    irow('🕊️', 'Fallecimiento', [person.death_date ? fmtD(person.death_date) : '', person.death_place ? esc(person.death_place) : ''].filter(Boolean).join(' — '));
+    irow('📝', 'Causa', person.death_cause ? esc(person.death_cause) : '');
+    irow('⚰️', 'Entierro', person.burial_place ? esc(person.burial_place) : '');
   }
-  kv('Teléfono', person.phone ? esc(person.phone) : '');
-  if (person.bio) kv('Sobre esta persona', esc(person.bio));
-  kv('Ocupación', person.occupation ? esc(person.occupation) : '');
-  kv('Educación', person.education ? esc(person.education) : '');
-  kv('Religión', person.religion ? esc(person.religion) : '');
-  kv('Nacionalidad', person.nationality ? esc(person.nationality) : '');
-  kv('Residencia', person.residence ? esc(person.residence) : '');
-  kv('Servicio militar', person.military_service ? esc(person.military_service) : '');
-  if (person.notes) kv('Notas y fuentes', esc(person.notes));
-  const y = (person.birthdate || '').slice(0, 4), dy = (person.death_date || '').slice(0, 4);
+  irow('📞', 'Teléfono', person.phone ? esc(person.phone) : '');
+  if (person.bio) irow('📄', 'Sobre esta persona', esc(person.bio));
+  irow('💼', 'Ocupación', person.occupation ? esc(person.occupation) : '');
+  irow('🎓', 'Educación', person.education ? esc(person.education) : '');
+  irow('⛪', 'Religión', person.religion ? esc(person.religion) : '');
+  irow('🌐', 'Nacionalidad', person.nationality ? esc(person.nationality) : '');
+  irow('🏠', 'Residencia', person.residence ? esc(person.residence) : '');
+  irow('🎖️', 'Servicio militar', person.military_service ? esc(person.military_service) : '');
+  if (person.notes) irow('📌', 'Notas y fuentes', esc(person.notes));
+  if (person.username) irow('🔑', 'Cuenta GENLORIA', 'Tiene su propia cuenta');
+
+  // Filas de familia
+  const famRows = [];
+  const frow = (icon, label, value) => {
+    if (!value) return;
+    famRows.push(`<div class="pv-row"><span class="pv-ic">${icon}</span><span class="pv-lab">${label}</span><span class="pv-val">${value}</span></div>`);
+  };
+  if (r.parents1.length) frow('👪', 'Padres', r.parents1.map(p => nm(p.id)).join(', '));
+  if (r.partner) frow('❤️', 'Pareja', nm(r.partner.id) + (r.partner.marriage_date ? ` (matr. ${fmtD(r.partner.marriage_date)})` : ''));
+  if (r.former.length) frow('💔', 'Parejas anteriores', r.former.map(nm).join(', '));
+  if (r.children.length) frow('👨‍👩‍👧', 'Hijos', r.children.map(nm).join(', '));
+
+  const canEdit = isAdmin || person.id === (me && me.id);
+
   return `
-  <div class="sheet-body" style="padding:0">
-    <div style="text-align:center;padding:20px 20px 8px">
-      ${avatarHTML(person, '')}
-      <h2 style="margin:10px 0 2px">${esc(person.name)}${person.is_deceased ? ' ✝' : ''}</h2>
-      <p class="uname">${y || dy ? (person.is_deceased ? `✝ ${y || '…'}–${dy || '…'}` : y) : ''}${person.is_placeholder ? ' · <span class="chip">SOLO ÁRBOL</span>' : ''}</p>
-    </div>
-    <div style="padding:0 20px">
-      ${rows.length ? `<div class="card" style="margin:0 0 12px">${rows.join('')}</div>` : ''}
-      <div class="card" style="margin:0 0 12px"><h3 style="margin-top:0">👨‍👩‍👧 Familia</h3>
-        ${r.parents1.length ? `<p style="margin:6px 0"><strong>Padres:</strong> ${r.parents1.map(p => `${nm(p.id)}${p.link_type !== 'biologico' ? ` (${LINK_TYPE_LABEL[p.link_type]})` : ''}`).join(', ')}</p>` : ''}
-        ${r.parents2.length ? `<p style="margin:6px 0"><strong>Padres (${LINK_TYPE_LABEL[r.parents2[0].link_type]}):</strong> ${r.parents2.map(p => nm(p.id)).join(', ')}</p>` : ''}
-        ${r.partner ? `<p style="margin:6px 0"><strong>Pareja:</strong> ${nm(r.partner.id)}${r.partner.marriage_date ? ` (matr. ${fmtDate(r.partner.marriage_date)})` : ''}</p>` : ''}
-        ${r.former.length ? `<p style="margin:6px 0"><strong>Parejas anteriores:</strong> ${r.former.map(nm).join(', ')}</p>` : ''}
-        ${r.children.length ? `<p style="margin:6px 0"><strong>Hijos:</strong> ${r.children.map(nm).join(', ')}</p>` : ''}
-        ${!r.parents1.length && !r.partner && !r.children.length ? '<p style="color:var(--muted)">Sin relaciones registradas.</p>' : ''}
+  <div class="sheet-body pv-sheet">
+    <button class="pv-x" id="pv-close" aria-label="Cerrar">✕</button>
+    <div class="pv-head">
+      <div class="pv-photo-wrap">
+        <img class="pv-photo" src="${avatar}" alt="${esc(person.name)}" onerror="this.src='/icons/avatar-default.svg'">
+        ${canEdit ? `<button class="pv-cam" id="pv-photo" title="Cambiar foto">📷</button>` : ''}
       </div>
+      <h2 class="pv-name">${esc(person.name)}${person.is_deceased ? ' ✝' : ''}</h2>
+      ${y ? `<div class="pv-year"><span class="pv-line"></span>${y}<span class="pv-line"></span></div>` : ''}
+      ${person.is_placeholder ? '<div style="margin-top:6px"><span class="chip">SOLO ÁRBOL</span></div>' : ''}
     </div>
-    <div style="display:flex;gap:10px;padding:0 20px 20px">
-      <button class="btn secondary" id="pv-print" style="margin-top:0">🖨️ Imprimir</button>
-      ${(isAdmin || person.id === (me && me.id)) ? `<button class="btn" id="pv-edit" style="margin-top:0">✏️ Editar ficha</button>` : `<button class="btn secondary" id="pv-suggest" style="margin-top:0">Proponer corrección</button>`}
-      <button class="btn secondary" id="pv-close" style="margin-top:0">Cerrar</button>
+    <div class="pv-actions">
+      ${person.phone ? `<button class="pv-act" id="pv-call"><span>📞</span>Llamar</button>` : ''}
+      ${person.username && person.id !== me.id ? `<button class="pv-act" id="pv-msg"><span>💬</span>Mensaje</button>` : ''}
+      <button class="pv-act" id="pv-tree"><span>🌳</span>Ver en árbol</button>
+      <button class="pv-act" id="pv-print"><span>🖨️</span>Imprimir</button>
+    </div>
+    ${infoRows.length ? `
+    <div class="pv-card">
+      <div class="pv-card-head"><span class="pv-card-ic">👤</span><b>Información personal</b>
+        ${canEdit ? `<button class="pv-edit" id="pv-edit">✏️ Editar</button>` : `<button class="pv-edit" id="pv-suggest">✏️ Proponer</button>`}
+      </div>
+      ${infoRows.join('')}
+    </div>` : ''}
+    ${famRows.length ? `
+    <div class="pv-card">
+      <div class="pv-card-head"><span class="pv-card-ic">👪</span><b>Familia</b>
+        ${canEdit ? `<button class="pv-edit" id="pv-edit2">✏️ Editar</button>` : ''}
+      </div>
+      ${famRows.join('')}
+    </div>` : '<div class="pv-card"><p style="color:var(--muted);margin:0">Sin relaciones registradas.</p></div>'}
+    <div class="pv-foot">
+      ${canEdit ? `<button class="btn" id="pv-edit3" style="margin-top:0">✏️ Editar ficha</button>` : ''}
+      <button class="btn secondary" id="pv-close2" style="margin-top:0">Cerrar</button>
     </div>
   </div>`;
 }
 
 function wirePersonView(person, t, isAdmin) {
-  $('#pv-close').onclick = closeSheet;
-  $('#pv-print').onclick = () => {
+  const doClose = () => closeSheet();
+  $('#pv-close').onclick = doClose;
+  const c2 = $('#pv-close2'); if (c2) c2.onclick = doClose;
+  const doPrint = () => {
     const a = document.createElement('a');
     a.href = `/api/export/person/${person.id}.pdf`;
     a.download = '';
@@ -1650,10 +1687,27 @@ function wirePersonView(person, t, isAdmin) {
     a.click();
     a.remove();
   };
-  const ed = $('#pv-edit');
-  if (ed) ed.onclick = () => openPersonSheet(person.id, 'edit');
+  const pr = $('#pv-print'); if (pr) pr.onclick = doPrint;
+  const goEdit = () => openPersonSheet(person.id, 'edit');
+  ['pv-edit', 'pv-edit2', 'pv-edit3'].forEach(id => { const b = $('#' + id); if (b) b.onclick = goEdit; });
   const sg = $('#pv-suggest');
   if (sg) sg.onclick = () => { closeSheet(); location.hash = `#/tree/suggest?uid=${person.id}`; };
+  const call = $('#pv-call');
+  if (call && person.phone) call.onclick = () => { location.href = 'tel:' + person.phone.replace(/[^+\d]/g, ''); };
+  const msg = $('#pv-msg');
+  if (msg) msg.onclick = async () => {
+    try {
+      const { conversation } = await api('/api/chat/conversations', {
+        method: 'POST', body: JSON.stringify({ participant_ids: [person.id] })
+      });
+      closeSheet();
+      location.hash = `#/chat/${conversation.id}`;
+    } catch (e) { toast(e.message); }
+  };
+  const tree = $('#pv-tree');
+  if (tree) tree.onclick = () => { closeSheet(); location.hash = '#/tree'; };
+  const photo = $('#pv-photo');
+  if (photo) photo.onclick = () => { closeSheet(); openPersonSheet(person.id, 'edit'); };
 }
 
 async function openPersonSheet(userId, mode) {
