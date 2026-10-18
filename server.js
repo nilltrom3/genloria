@@ -48,8 +48,16 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
 
-// Frontend (PWA)
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: isProd ? '1h' : 0 }));
+// Frontend (PWA) — el service worker y el app shell nunca se cachean en HTTP
+// para que las actualizaciones se detecten de inmediato
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: isProd ? '1h' : 0,
+  setHeaders: (res, filePath) => {
+    if (/service-worker\.js$|index\.html$|app\.js$|styles\.js$|manifest\.json$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  }
+}));
 
 // API
 app.get('/api/health', (req, res) => res.json({ ok: true, version: '1.0.0' }));
