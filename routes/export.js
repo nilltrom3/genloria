@@ -68,6 +68,7 @@ router.get('/family.pdf', requireAuth, (req, res) => {
   const doc = new PDFDocument({ margin: 0, size: 'LETTER' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="genloria-datos-familiares.pdf"');
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
   doc.pipe(res);
 
   const NAVY = '#0b2b4f', GOLD = '#d4a017', GREEN = '#2e7d32', GRAY = '#616161', DARK = '#1a1a1a';
@@ -316,6 +317,7 @@ router.get('/person/:id.pdf', requireAuth, (req, res) => {
 
   const doc = new PDFDocument({ margin: 0, size: 'LETTER' });
   res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
   const fname = (person.name || 'ficha').replace(/[^a-zA-Z0-9áéíóúñü ]/gi, '').trim().replace(/\s+/g, '-');
   res.setHeader('Content-Disposition', `attachment; filename="genloria-ficha-${fname}.pdf"`);
   doc.pipe(res);
@@ -479,6 +481,7 @@ router.get('/family.gedcom', requireAuth, (req, res) => {
   }
   L.push('0 TRLR');
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
   res.setHeader('Content-Disposition', 'attachment; filename="genloria-familia.gedcom"');
   res.send(L.join('\n'));
 });
