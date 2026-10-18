@@ -660,3 +660,29 @@ input[type=file] { display: none; }
 .chat-msgs2 { flex: 1; min-height: 0; }
 .chat-form2 { flex-shrink: 0; }
 .chat-preview { flex-shrink: 0; }
+
+/* Historias: diseño exacto por capas (foto + aro dorado + hojas) */
+.story-exact {
+  position: relative; width: 92px; height: 104px; display: block; margin: 0 auto;
+}
+.story-exact .se-photo {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 66px; height: 66px; border-radius: 50%; object-fit: cover;
+  background: #22344f;
+}
+.story-exact .se-ring {
+  position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+  width: 72px; height: 72px; border-radius: 50%;
+  border: 3.5px solid #d4a017;
+  box-shadow: 0 0 6px rgba(212,160,23,.6), inset 0 0 4px rgba(212,160,23,.3);
+  pointer-events: none;
+}
+.story-exact .se-leaves {
+  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+  width: 104px; height: 116px; object-fit: contain; pointer-events: none;
+}
+.story-exact .se-plus {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 66px; height: 66px; border-radius: 50%; background: #1a6fd4;
+  color: #fff; font-size: 2rem; display: flex; align-items: center; justify-content: center;
+}

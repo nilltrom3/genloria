@@ -682,12 +682,12 @@ function storyBarHTML() {
     let media;
     if (story.media_path) {
       media = story.media_type === 'video'
-        ? `<video class="tf-photo" src="${esc(story.media_path)}" muted playsinline preload="metadata" onerror="this.outerHTML='<img class=&quot;tf-photo&quot; src=&quot;${avatarFallback}&quot;>'"></video>`
-        : `<img class="tf-photo" src="${esc(story.media_path)}" alt="${alt}" onerror="this.src='${avatarFallback}'">`;
+        ? `<video class="se-photo" src="${esc(story.media_path)}" muted playsinline preload="metadata" onerror="this.outerHTML='<img class=&quot;se-photo&quot; src=&quot;${avatarFallback}&quot;>'"></video>`
+        : `<img class="se-photo" src="${esc(story.media_path)}" alt="${alt}" onerror="this.src='${avatarFallback}'">`;
     } else {
-      media = `<img class="tf-photo" src="${avatarFallback}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">`;
+      media = `<img class="se-photo" src="${avatarFallback}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">`;
     }
-    return `<span class="tree-frame-wrap">${media}<img class="tf-frame" src="${frame}" alt=""></span>`;
+    return `<span class="story-exact">${media}<span class="se-ring"></span><img class="se-leaves" src="/icons/story-leaves.png" alt=""></span>`;
   };
   let html = `<div class="stories-bar">`;
   if (mine) {
@@ -698,9 +698,10 @@ function storyBarHTML() {
     </button>`;
   } else {
     html += `<button class="story-tree add" id="add-story">
-      <span class="tree-frame-wrap">
-        <span class="tf-plus">＋</span>
-        <img class="tf-frame" src="${frame}" alt="">
+      <span class="story-exact">
+        <span class="se-plus">＋</span>
+        <span class="se-ring"></span>
+        <img class="se-leaves" src="/icons/story-leaves.png" alt="">
       </span>
       <div class="sname" style="color:${userColorFor(me)}">Tu historia</div>
     </button>`;
