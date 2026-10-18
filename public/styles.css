@@ -623,3 +623,29 @@ input[type=file] { display: none; }
   background: var(--danger); color: #fff; border: 0; border-radius: 50%;
   width: 28px; height: 28px; cursor: pointer; font-size: .9rem;
 }
+
+/* Hoja de opciones (action sheet) */
+.action-sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.action-sheet {
+  background: var(--card); border-radius: 18px 18px 0 0; width: 100%;
+  max-width: 500px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  animation: slideUp .25s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%);} to { transform: translateY(0);} }
+.action-sheet button {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px; font-size: 1rem; color: var(--text); cursor: pointer;
+}
+.action-sheet button.cancel { color: var(--danger); }
+
+/* Historias: marco más sutil */
+.story-tree { width: 84px; }
+.tree-frame-wrap { width: 76px; height: 76px; }
+.tree-frame-wrap .tf-photo { width: 58px; height: 58px; }
+.story-tree .sname { max-width: 84px; }
+
+/* Chat: bloquear zoom con gestos */
+.chat-msgs2, .chat-form2 { touch-action: pan-x pan-y; }

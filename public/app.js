@@ -677,15 +677,16 @@ function storyBarHTML() {
   const mine = storyGroups.find(g => g.user.id === me.id);
   const frame = '/icons/story-tree-frame.png';
   // Foto circular con el marco del árbol GENLORIA encima
-  const framedPhoto = (src, alt) => `
-    <span class="tree-frame-wrap">
-      <img class="tf-photo" src="${src}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">
-      <img class="tf-frame" src="${frame}" alt="">
-    </span>`;
+  const framedPhoto = (story, user, alt) => {
+    const media = story.media_type === 'video'
+      ? `<video class="tf-photo" src="${esc(story.media_path)}" muted playsinline preload="metadata"></video>`
+      : `<img class="tf-photo" src="${esc(story.media_path)}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">`;
+    return `<span class="tree-frame-wrap">${media}<img class="tf-frame" src="${frame}" alt=""></span>`;
+  };
   let html = `<div class="stories-bar">`;
   if (mine) {
     html += `<button class="story-tree" data-viewmine="1">
-      ${framedPhoto(mine.stories[0].media_type === 'video' ? (mine.user.avatar_path || '/icons/avatar-default.svg') : mine.stories[0].media_path, 'Mi historia')}
+      ${framedPhoto(mine.stories[0], mine.user, 'Mi historia')}
       <div class="sname" style="color:${userColorFor(me)}">Tú</div>
       <span class="sc-add" id="add-more-story" title="Agregar">＋</span>
     </button>`;
@@ -699,10 +700,8 @@ function storyBarHTML() {
     </button>`;
   }
   for (const g of storyGroups.filter(g => g.user.id !== me.id)) {
-    const s0 = g.stories[0];
-    const src = s0.media_type === 'video' ? (g.user.avatar_path || '/icons/avatar-default.svg') : s0.media_path;
     html += `<button class="story-tree" data-stories="${esc(g.user.username)}">
-      ${framedPhoto(src, g.user.name)}
+      ${framedPhoto(g.stories[0], g.user, g.user.name)}
       <div class="sname" style="color:${userColorFor(g.user)}">${esc(g.user.name.split(' ')[0])}</div>
     </button>`;
   }
@@ -756,8 +755,23 @@ function renderFeed() {
     input.click();
   };
   const askStorySource = (cb) => {
-    const choice = confirm('¿Tomar foto con la cámara?\nAceptar = Cámara / Cancelar = Galería');
-    cb(choice);
+    // Hoja de opciones: Tirar foto o Galería
+    const sheet = document.createElement('div');
+    sheet.className = 'action-sheet-backdrop';
+    sheet.innerHTML = `<div class="action-sheet">
+      <button data-src="camera">📷 Tirar foto</button>
+      <button data-src="gallery">🖼️ Elegir de galería</button>
+      <button data-src="cancel" class="cancel">Cancelar</button>
+    </div>`;
+    document.body.appendChild(sheet);
+    sheet.addEventListener('click', e => {
+      const btn = e.target.closest('[data-src]');
+      if (!btn && e.target !== sheet) return;
+      const src = btn ? btn.dataset.src : 'cancel';
+      sheet.remove();
+      if (src === 'cancel') return;
+      cb(src === 'camera');
+    });
   };
   const addBtn = $('#add-story');
   if (addBtn) addBtn.addEventListener('click', () => askStorySource(openFilePicker));
@@ -967,6 +981,7 @@ let chatPollTimer = null;
 function stopChatPoll() { if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; } }
 
 async function viewChatList() {
+  lockZoom(false);
   stopChatPoll();
   setNav('chat');
   app.innerHTML = `${topbar('Chat')}<div class="loading">Cargando…</div>`;
@@ -1045,9 +1060,21 @@ async function openNewChatSheet() {
   } catch (e) { toast(e.message); }
 }
 
+function lockZoom(lock) {
+  let vp = document.querySelector('meta[name=viewport]');
+  if (!vp) return;
+  if (lock) {
+    if (!vp.dataset.orig) vp.dataset.orig = vp.content;
+    vp.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+  } else if (vp.dataset.orig) {
+    vp.content = vp.dataset.orig;
+  }
+}
+
 async function viewChatThread(cid) {
   stopChatPoll();
   setNav('chat');
+  lockZoom(true);
   app.innerHTML = `${topbar('Chat')}<div class="loading">Cargando…</div>`;
   let other = null, lastId = 0, lastDate = '';
   const fmtTime = ts => new Date(ts + 'Z').toLocaleString('es', { hour: '2-digit', minute: '2-digit' });
@@ -2383,6 +2410,8 @@ async function boot() {
 
   async function route() {
     const h = location.hash || '#/feed';
+    // Restaurar zoom si se sale del chat
+    if (!h.startsWith('#/chat/')) lockZoom(false);
     if (!me && h !== '#/login' && h !== '#/register' && h !== '#/recover' && h !== '#/conoce') { location.hash = '#/login'; return; }
     if (me && (h === '#/login' || h === '#/register' || h === '#/recover')) { location.hash = '#/feed'; return; }
     if (h === '#/login') return viewLogin();
