@@ -13,16 +13,26 @@ function requireAuth(req, res, next) {
 }
 
 // Recolecta personas + relaciones para exportar
-function collectFamily() {
-  const users = db.prepare(`SELECT * FROM users ORDER BY name`).all();
+function collectFamily(familyId) {
+  const users = db.prepare(`SELECT * FROM users WHERE family_id = ? ORDER BY name`).all(familyId);
+  const ids = users.map(u => u.id);
   const byId = Object.fromEntries(users.map(u => [u.id, u]));
-  const pl = db.prepare('SELECT parent_id, child_id, link_type, link_set FROM parent_links').all();
+  const inList = ids.length ? `(${ids.map(() => '?').join(',')})` : '(NULL)';
+  const pl = db.prepare(`SELECT parent_id, child_id, link_type, link_set FROM parent_links
+                          WHERE parent_id IN ${inList} AND child_id IN ${inList}`).all(...ids, ...ids);
   const parents = {};
   for (const r of pl) {
     (parents[r.child_id] = parents[r.child_id] || []).push({ id: r.parent_id, link_type: r.link_type, link_set: r.link_set });
   }
-  const couples = db.prepare('SELECT user1_id, user2_id, marriage_date, marriage_place, status FROM couples').all();
+  const couples = db.prepare(`SELECT user1_id, user2_id, marriage_date, marriage_place, status FROM couples
+                              WHERE user1_id IN ${inList} AND user2_id IN ${inList}`).all(...ids, ...ids);
   return { users, byId, parents, couples };
+}
+
+// Familia del usuario autenticado (o null si no tiene)
+function myFamilyId(req) {
+  const me = db.prepare('SELECT family_id FROM users WHERE id = ?').get(req.session.userId);
+  return me ? me.family_id : null;
 }
 
 const fullName = u => u.name;
@@ -63,7 +73,9 @@ const genLabel = i => GEN_LABEL[i] || `Generación ${i + 1}`;
 
 // Reemplazo completo de la ruta /family.pdf con el diseño acordado
 router.get('/family.pdf', requireAuth, (req, res) => {
-  const { users, byId, parents, couples } = collectFamily();
+  const famId = myFamilyId(req);
+  if (!fid) return res.status(404).json({ error: 'Sin familia asignada.' });
+  const { users, byId, parents, couples } = collectFamily(famId);
   const meRow = db.prepare('SELECT family_id FROM users WHERE id = ?').get(req.session.userId);
   const famRow = meRow && meRow.family_id
     ? db.prepare('SELECT name FROM families WHERE id = ?').get(meRow.family_id) : null;
@@ -314,7 +326,9 @@ router.get('/family.pdf', requireAuth, (req, res) => {
 
 // ---- PDF de ficha personal ----
 router.get('/person/:id.pdf', requireAuth, (req, res) => {
-  const { users, byId, parents, couples } = collectFamily();
+  const famId = myFamilyId(req);
+  if (!fid) return res.status(404).json({ error: 'Sin familia asignada.' });
+  const { users, byId, parents, couples } = collectFamily(famId);
   const person = byId[req.params.id];
   if (!person) return res.status(404).json({ error: 'Persona no encontrada.' });
 
@@ -422,7 +436,9 @@ router.get('/person/:id.pdf', requireAuth, (req, res) => {
 
 // ---- GEDCOM 5.5.1 ----
 router.get('/family.gedcom', requireAuth, (req, res) => {
-  const { users, byId, parents, couples } = collectFamily();
+  const famId = myFamilyId(req);
+  if (!fid) return res.status(404).json({ error: 'Sin familia asignada.' });
+  const { users, byId, parents, couples } = collectFamily(famId);
   const L = [];
   const esc = s => (s || '').toString().replace(/@/g, '(at)').trim();
   const gid = id => `@P${id}@`, fid = (a, b) => `@F${Math.min(a, b)}_${Math.max(a, b)}@`;

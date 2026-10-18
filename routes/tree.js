@@ -57,6 +57,9 @@ function addCouple(a, b, opts) {
   const status = opts.status === 'anterior' ? 'anterior' : 'actual';
   if (!userExists(a) || !userExists(b)) return 'Una de las personas no existe.';
   if (a === b) return 'Debe ser otra persona.';
+  const fa = db.prepare('SELECT family_id FROM users WHERE id = ?').get(a);
+  const fb = db.prepare('SELECT family_id FROM users WHERE id = ?').get(b);
+  if (!fa || !fb || fa.family_id !== fb.family_id) return 'Las personas deben ser de la misma familia.';
   const [u1, u2] = a < b ? [a, b] : [b, a];
   if (db.prepare('SELECT 1 FROM couples WHERE user1_id = ? AND user2_id = ?').get(u1, u2))
     return 'Esa pareja ya está registrada.';

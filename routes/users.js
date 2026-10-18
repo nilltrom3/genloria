@@ -2,29 +2,20 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const db = require('../db');
 const { publicUser, issueRecoveryCode, validEmail, cleanPersonFields, PERSON_FIELDS } = require('./auth');
+const { createUpload, UPLOAD_DIR } = require('../upload');
 
 const router = express.Router();
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const avatarUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase().slice(0, 10) || '.png';
-      cb(null, `avatar-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`);
-    }
-  }),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) return cb(null, true);
-    cb(new Error('El avatar debe ser una imagen.'));
-  }
+// Subida segura de avatares: solo imágenes en lista cerrada (sin .svg), MIME validado.
+const avatarUpload = createUpload({
+  prefix: 'avatar',
+  maxBytes: 5 * 1024 * 1024,
+  allowPhoto: true,
+  allowVideo: false
 });
 
 function requireAuth(req, res, next) {
@@ -37,17 +28,21 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// Ficha de persona por id (para la hoja genealógica)
+// Ficha de persona por id (para la hoja genealógica) — solo mi familia
 router.get('/by-id/:id', requireAuth, (req, res) => {
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!u) return res.status(404).json({ error: 'Persona no encontrada.' });
+  const myFam = db.getFamilyId(req.session.userId);
+  if (u.family_id !== myFam) return res.status(403).json({ error: 'No tienes permiso.' });
   res.json({ user: publicUser(u) });
 });
 
-// Ver perfil público + sus publicaciones
-router.get('/:username', (req, res) => {
+// Ver perfil + sus publicaciones — solo miembros de mi familia
+router.get('/:username', requireAuth, (req, res) => {
   const u = db.prepare('SELECT * FROM users WHERE username = ?').get(req.params.username);
   if (!u) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  const myFam = db.getFamilyId(req.session.userId);
+  if (u.family_id !== myFam) return res.status(403).json({ error: 'No tienes permiso.' });
   const postCount = db.prepare('SELECT COUNT(*) c FROM posts WHERE user_id = ?').get(u.id).c;
   res.json({ user: publicUser(u), postCount });
 });
@@ -201,16 +196,20 @@ router.post('/people', requireAuth, (req, res) => {
   let username = base, i = 1;
   while (db.prepare('SELECT id FROM users WHERE username = ?').get(username)) username = `${base}${i++}`;
   const unusable = bcrypt.hashSync(require('crypto').randomBytes(32).toString('hex'), 10);
-  const info = db.prepare(`INSERT INTO users (username, name, email, password_hash, role, is_placeholder)
-    VALUES (?,?,NULL,?,?,?)`).run(username, name, unusable, 'member', 1);
+  const fid = db.getFamilyId(req.session.userId);
+  const info = db.prepare(`INSERT INTO users (username, name, email, password_hash, role, is_placeholder, family_id)
+    VALUES (?,?,NULL,?,?,?,?)`).run(username, name, unusable, 'member', 1, fid);
   const u = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   res.status(201).json({ user: publicUser(u) });
 });
 
-// Editar ficha de cualquier persona (admin)
+// Editar ficha de cualquier persona (admin de MI familia)
 router.put('/admin/users/:id', requireAuth, requireAdmin, avatarUpload.single('photo'), (req, res) => {
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'Persona no encontrada.' });
+  const myFam = db.getFamilyId(req.session.userId);
+  if (target.family_id !== myFam)
+    return res.status(403).json({ error: 'Esa persona no es de tu familia.' });
   const b = req.body || {};
   const name = (b.name || '').toString().trim();
   if (name && (name.length < 2 || name.length > 80))
@@ -235,14 +234,17 @@ router.put('/admin/users/:id', requireAuth, requireAdmin, avatarUpload.single('p
   res.json({ user: publicUser(updated) });
 });
 
-// Eliminar persona (admin; no puede eliminarse a sí mismo)
+// Eliminar persona (admin de MI familia; no puede eliminarse a sí mismo)
 // Borra la cuenta y, por CASCADE, sus publicaciones, likes, comentarios,
 // historias y parentescos. También borra sus archivos subidos.
 router.delete('/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
-  const target = db.prepare('SELECT id, role, avatar_path FROM users WHERE id = ?').get(req.params.id);
+  const target = db.prepare('SELECT id, role, avatar_path, family_id FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'Persona no encontrada.' });
   if (target.id === req.session.userId)
     return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta.' });
+  const myFam = db.getFamilyId(req.session.userId);
+  if (target.family_id !== myFam)
+    return res.status(403).json({ error: 'Esa persona no es de tu familia.' });
   const media = db.prepare(`SELECT media_path FROM posts WHERE user_id = ?
                             UNION SELECT media_path FROM stories WHERE user_id = ?`)
     .all(target.id, target.id);
@@ -319,7 +321,7 @@ router.get('/platform/users', requireAuth, requireSuperAdmin, (req, res) => {
 router.post('/admin/invite-codes', requireAuth, requireAdmin, (req, res) => {
   const { code, maxUses } = req.body || {};
   const finalCode = (code || '').toString().trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32)
-    || ('FAM-' + Math.random().toString(36).slice(2, 8).toUpperCase());
+    || ('FAM-' + crypto.randomBytes(4).toString('hex').toUpperCase());
   try {
     const info = db.prepare('INSERT INTO invite_codes (code, created_by, max_uses) VALUES (?,?,?)')
       .run(finalCode, req.session.userId, Math.max(0, parseInt(maxUses || '0', 10)));

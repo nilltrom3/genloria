@@ -2,30 +2,19 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
 const db = require('../db');
+const { createUpload, UPLOAD_DIR } = require('../upload');
 
 const router = express.Router();
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const MAX_PHOTO_MB = parseInt(process.env.MAX_PHOTO_MB || '10', 10);
 const MAX_VIDEO_MB = parseInt(process.env.MAX_VIDEO_MB || '100', 10);
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-    filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase().slice(0, 10) || '.bin';
-      cb(null, `story-${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`);
-    }
-  }),
-  limits: { fileSize: MAX_VIDEO_MB * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) return cb(null, true);
-    cb(new Error('Solo se permiten fotos y videos.'));
-  }
+// Subida segura: extensiones en lista cerrada (sin .svg), MIME validado.
+const upload = createUpload({
+  prefix: 'story',
+  maxBytes: MAX_VIDEO_MB * 1024 * 1024,
+  allowPhoto: true,
+  allowVideo: true
 });
 
 function requireAuth(req, res, next) {
@@ -33,11 +22,12 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// Historias vigentes agrupadas por usuario (las vencidas se excluyen y se purgan)
-router.get('/', (req, res) => {
+// Historias vigentes agrupadas por usuario (las vencidas se excluyen y se purgan).
+// Requiere sesión: las historias familiares son privadas.
+router.get('/', requireAuth, (req, res) => {
   db.prepare("DELETE FROM stories WHERE expires_at <= datetime('now')").run();
   const meId = req.session.userId;
-  const fid = meId ? db.getFamilyId(meId) : null;
+  const fid = db.getFamilyId(meId);
   let sql = `SELECT s.id, s.media_path, s.media_type, s.created_at, s.expires_at,
     u.id AS uid, u.username, u.name, u.avatar_path
     FROM stories s JOIN users u ON u.id = s.user_id

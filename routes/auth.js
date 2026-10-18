@@ -113,10 +113,10 @@ router.post('/register', authLimiter, (req, res) => {
     const fname = (familyName || '').toString().trim();
     if (fname.length < 2 || fname.length > 80)
       return res.status(400).json({ error: 'El nombre de la familia debe tener entre 2 y 80 caracteres.' });
-    // Crear la familia con un código de invitación único
+    // Crear la familia con un código de invitación único (aleatorio criptográfico)
     let code, tries = 0;
     do {
-      code = 'FAMILIA-' + Math.random().toString(36).slice(2, 6).toUpperCase();
+      code = 'FAMILIA-' + crypto.randomBytes(3).toString('hex').toUpperCase();
       tries++;
     } while (db.prepare('SELECT id FROM families WHERE invite_code = ?').get(code) && tries < 10);
     const fam = db.prepare('INSERT INTO families (name, invite_code) VALUES (?,?)').run(fname, code);
@@ -150,9 +150,13 @@ router.post('/register', authLimiter, (req, res) => {
   }
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
-  req.session.userId = user.id;
-  const famInfo = db.prepare('SELECT id, name, invite_code FROM families WHERE id = ?').get(familyId);
-  res.status(201).json({ user: publicUser(user), family: famInfo });
+  // Regenerar el ID de sesión al crear la cuenta (previene session fixation)
+  req.session.regenerate((err) => {
+    if (err) return res.status(500).json({ error: 'Cuenta creada, pero falló la sesión. Inicia sesión.' });
+    req.session.userId = user.id;
+    const famInfo = db.prepare('SELECT id, name, invite_code FROM families WHERE id = ?').get(familyId);
+    res.status(201).json({ user: publicUser(user), family: famInfo });
+  });
 });
 
 // Login con correo electrónico (o usuario, por compatibilidad)
@@ -165,15 +169,19 @@ router.post('/login', authLimiter, (req, res) => {
     .get(identifier.toLowerCase(), identifier);
   if (!user || !bcrypt.compareSync(password, user.password_hash))
     return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
-  req.session.userId = user.id;
-  // "Mantener sesión iniciada": 30 días; si no, la cookie expira al cerrar el navegador
-  if (req.body && req.body.remember === false) {
-    req.session.cookie.maxAge = null;
-    req.session.cookie.expires = false;
-  } else {
-    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-  }
-  res.json({ user: publicUser(user) });
+  // Regenerar el ID de sesión al iniciar sesión (previene session fixation)
+  req.session.regenerate((err) => {
+    if (err) return res.status(500).json({ error: 'Error de sesión. Intenta de nuevo.' });
+    req.session.userId = user.id;
+    // "Mantener sesión iniciada": 30 días; si no, la cookie expira al cerrar el navegador
+    if (req.body && req.body.remember === false) {
+      req.session.cookie.maxAge = null;
+      req.session.cookie.expires = false;
+    } else {
+      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+    }
+    res.json({ user: publicUser(user) });
+  });
 });
 
 function requireAuth(req, res, next) {
@@ -194,6 +202,9 @@ router.post('/claim', authLimiter, requireAuth, (req, res) => {
   if (!ph || !ph.is_placeholder)
     return res.status(404).json({ error: 'Esa persona ya tiene cuenta o no existe.' });
   if (ph.id === me.id) return res.status(400).json({ error: 'No puedes reclamarte a ti mismo.' });
+  // Seguridad: solo se puede reclamar una identidad de MI familia
+  if (!ph.family_id || ph.family_id !== me.family_id)
+    return res.status(403).json({ error: 'Esa persona no es de tu familia.' });
   // Fusionar: el placeholder adopta las credenciales de la cuenta nueva.
   // Primero se borra la cuenta temporal para liberar el email, luego se activa el placeholder.
   const { name, email, password_hash, avatar_path, bio } = me;
@@ -265,7 +276,9 @@ router.get('/push-key', (req, res) => {
 // Guardar suscripción push
 router.post('/push-subscribe', requireAuth, (req, res) => {
   const { endpoint, p256dh, auth } = req.body || {};
-  if (!endpoint || !p256dh || !auth)
+  if (typeof endpoint !== 'string' || !endpoint.startsWith('https://') || endpoint.length > 2000 ||
+      typeof p256dh !== 'string' || !p256dh.length || p256dh.length > 500 ||
+      typeof auth !== 'string' || !auth.length || auth.length > 500)
     return res.status(400).json({ error: 'Suscripción inválida.' });
   db.prepare(`INSERT OR REPLACE INTO push_subscriptions (user_id, endpoint, p256dh, auth)
               VALUES (?,?,?,?)`).run(req.session.userId, endpoint, p256dh, auth);

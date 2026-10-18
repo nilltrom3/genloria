@@ -2,33 +2,21 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
 const db = require('../db');
 const { publicUser } = require('./auth');
-
+const { createUpload, UPLOAD_DIR } = require('../upload');
 const router = express.Router();
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const MAX_PHOTO_MB = parseInt(process.env.MAX_PHOTO_MB || '10', 10);
 const MAX_VIDEO_MB = parseInt(process.env.MAX_VIDEO_MB || '100', 10);
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase().slice(0, 10) || '.bin';
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 10)}${ext}`);
-  }
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: MAX_VIDEO_MB * 1024 * 1024 }, // el límite fino se valida por tipo
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) return cb(null, true);
-    cb(new Error('Solo se permiten fotos y videos.'));
-  }
+// Subida segura: extensiones en lista cerrada (sin .svg), MIME validado,
+// nombre generado por el servidor.
+const upload = createUpload({
+  prefix: 'post',
+  maxBytes: MAX_VIDEO_MB * 1024 * 1024, // el límite fino se valida por tipo
+  allowPhoto: true,
+  allowVideo: true
 });
 
 function requireAuth(req, res, next) {
@@ -57,10 +45,11 @@ function enrichPost(row, meId) {
   };
 }
 
-// Feed: publicaciones recientes con autor, likes y conteo de comentarios (solo mi familia)
-router.get('/', (req, res) => {
-  const meId = req.session.userId || null;
-  const fid = meId ? db.getFamilyId(meId) : null;
+// Feed: publicaciones recientes con autor, likes y conteo de comentarios (solo mi familia).
+// Requiere sesión: las publicaciones familiares son privadas.
+router.get('/', requireAuth, (req, res) => {
+  const meId = req.session.userId;
+  const fid = db.getFamilyId(meId);
   const limit = Math.min(parseInt(req.query.limit || '30', 10), 100);
   const before = req.query.before; // paginación por fecha
   let sql = `SELECT p.id AS post_id, p.text, p.media_path, p.media_type, p.created_at,
@@ -155,8 +144,12 @@ router.post('/:id/like', requireAuth, (req, res) => {
   res.json({ liked: !existing, likeCount });
 });
 
-// Comentarios de una publicación
-router.get('/:id/comments', (req, res) => {
+// Comentarios de una publicación (solo mi familia)
+router.get('/:id/comments', requireAuth, (req, res) => {
+  const post = db.prepare('SELECT family_id FROM posts WHERE id = ?').get(req.params.id);
+  if (!post) return res.status(404).json({ error: 'Publicación no encontrada.' });
+  if (post.family_id !== db.getFamilyId(req.session.userId))
+    return res.status(403).json({ error: 'No tienes permiso.' });
   const rows = db.prepare(`SELECT c.id, c.text, c.created_at, u.id AS uid, u.username, u.name, u.avatar_path
     FROM comments c JOIN users u ON u.id = c.user_id
     WHERE c.post_id = ? ORDER BY c.created_at ASC`).all(req.params.id);
