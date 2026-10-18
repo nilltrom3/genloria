@@ -675,41 +675,31 @@ async function viewFeed() {
 
 function storyBarHTML() {
   const mine = storyGroups.find(g => g.user.id === me.id);
-  const frame = '/icons/story-tree-frame.png';
-  // Foto circular con el marco del árbol GENLORIA encima
-  const framedPhoto = (story, user, alt) => {
-    const avatarFallback = user.avatar_path ? esc(user.avatar_path) : '/icons/avatar-default.svg';
-    let media;
-    if (story.media_path) {
-      media = story.media_type === 'video'
-        ? `<video class="se-photo" src="${esc(story.media_path)}" muted playsinline preload="metadata" onerror="this.outerHTML='<img class=&quot;se-photo&quot; src=&quot;${avatarFallback}&quot;>'"></video>`
-        : `<img class="se-photo" src="${esc(story.media_path)}" alt="${alt}" onerror="this.src='${avatarFallback}'">`;
-    } else {
-      media = `<img class="se-photo" src="${avatarFallback}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">`;
+  // Miniatura simple: foto de la historia o avatar
+  const thumb = (story, user) => {
+    const fb = user.avatar_path ? esc(user.avatar_path) : '/icons/avatar-default.svg';
+    if (story.media_path && story.media_type !== 'video') {
+      return `<img src="${esc(story.media_path)}" alt="" onerror="this.src='${fb}'">`;
     }
-    return `<span class="story-exact">${media}<span class="se-ring"></span><img class="se-leaves" src="/icons/story-leaves.png" alt=""></span>`;
+    return `<img src="${fb}" alt="" onerror="this.src='/icons/avatar-default.svg'">`;
   };
   let html = `<div class="stories-bar">`;
   if (mine) {
-    html += `<button class="story-tree" data-viewmine="1">
-      ${framedPhoto(mine.stories[0], mine.user, 'Mi historia')}
-      <div class="sname" style="color:${userColorFor(me)}">Tú</div>
-      <span class="sc-add" id="add-more-story" title="Agregar">＋</span>
+    html += `<button class="story-simple" data-viewmine="1">
+      <span class="ss-ring">${thumb(mine.stories[0], mine.user)}</span>
+      <div class="sname">Tú</div>
+      <span class="ss-add" id="add-more-story">＋</span>
     </button>`;
   } else {
-    html += `<button class="story-tree add" id="add-story">
-      <span class="story-exact">
-        <span class="se-plus">＋</span>
-        <span class="se-ring"></span>
-        <img class="se-leaves" src="/icons/story-leaves.png" alt="">
-      </span>
-      <div class="sname" style="color:${userColorFor(me)}">Tu historia</div>
+    html += `<button class="story-simple" id="add-story">
+      <span class="ss-ring add"><span class="ss-plus">＋</span></span>
+      <div class="sname">Tu historia</div>
     </button>`;
   }
   for (const g of storyGroups.filter(g => g.user.id !== me.id)) {
-    html += `<button class="story-tree" data-stories="${esc(g.user.username)}">
-      ${framedPhoto(g.stories[0], g.user, g.user.name)}
-      <div class="sname" style="color:${userColorFor(g.user)}">${esc(g.user.name.split(' ')[0])}</div>
+    html += `<button class="story-simple" data-stories="${esc(g.user.username)}">
+      <span class="ss-ring">${thumb(g.stories[0], g.user)}</span>
+      <div class="sname">${esc(g.user.name.split(' ')[0])}</div>
     </button>`;
   }
   html += `</div>`;
@@ -787,7 +777,7 @@ function renderFeed() {
   const mineCard = document.querySelector('[data-viewmine]');
   if (mineCard) mineCard.addEventListener('click', () => openStoryViewer(me.username));
 
-  $$('#feed-list [data-stories]').forEach(b =>
+  $$('#app [data-stories]').forEach(b =>
     b.addEventListener('click', () => openStoryViewer(b.dataset.stories)));
 
   $('#feed-list').addEventListener('click', async e => {
