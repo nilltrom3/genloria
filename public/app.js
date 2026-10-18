@@ -675,31 +675,35 @@ async function viewFeed() {
 
 function storyBarHTML() {
   const mine = storyGroups.find(g => g.user.id === me.id);
-  const thumb = g => {
-    const s = g.stories[0];
-    const isVideo = s.media_type === 'video';
-    return isVideo
-      ? `<video src="${esc(s.media_path)}" muted playsinline preload="metadata"></video>`
-      : `<img src="${esc(s.media_path)}" alt="">`;
-  };
+  const frame = '/icons/story-tree-frame.png';
+  // Foto circular con el marco del árbol GENLORIA encima
+  const framedPhoto = (src, alt) => `
+    <span class="tree-frame-wrap">
+      <img class="tf-photo" src="${src}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">
+      <img class="tf-frame" src="${frame}" alt="">
+    </span>`;
   let html = `<div class="stories-bar">`;
-  // Mi historia: nombre arriba con mi color, miniatura abajo
   if (mine) {
-    html += `<button class="story-card mine" data-viewmine="1">
-      <div class="sname top" style="color:${userColorFor(me)}">Mi historia</div>
-      <span class="sc-thumb">${thumb(mine)}<span class="sc-tree">🌳</span></span>
+    html += `<button class="story-tree" data-viewmine="1">
+      ${framedPhoto(mine.stories[0].media_type === 'video' ? (mine.user.avatar_path || '/icons/avatar-default.svg') : mine.stories[0].media_path, 'Mi historia')}
+      <div class="sname" style="color:${userColorFor(me)}">Tú</div>
       <span class="sc-add" id="add-more-story" title="Agregar">＋</span>
     </button>`;
   } else {
-    html += `<button class="story-card add" id="add-story">
-      <div class="sname top" style="color:${userColorFor(me)}">＋ Historia</div>
-      <span class="sc-thumb empty"><img src="${me.avatar_path ? esc(me.avatar_path) : '/icons/avatar-default.svg'}" alt="+" onerror="this.src='/icons/avatar-default.svg'"><span class="sc-plus">＋</span></span>
+    html += `<button class="story-tree add" id="add-story">
+      <span class="tree-frame-wrap">
+        <span class="tf-plus">＋</span>
+        <img class="tf-frame" src="${frame}" alt="">
+      </span>
+      <div class="sname" style="color:${userColorFor(me)}">Tu historia</div>
     </button>`;
   }
   for (const g of storyGroups.filter(g => g.user.id !== me.id)) {
-    html += `<button class="story-card" data-stories="${esc(g.user.username)}">
-      <div class="sname top" style="color:${userColorFor(g.user)}">${esc(g.user.name.split(' ')[0])}</div>
-      <span class="sc-thumb">${thumb(g)}</span>
+    const s0 = g.stories[0];
+    const src = s0.media_type === 'video' ? (g.user.avatar_path || '/icons/avatar-default.svg') : s0.media_path;
+    html += `<button class="story-tree" data-stories="${esc(g.user.username)}">
+      ${framedPhoto(src, g.user.name)}
+      <div class="sname" style="color:${userColorFor(g.user)}">${esc(g.user.name.split(' ')[0])}</div>
     </button>`;
   }
   html += `</div>`;
