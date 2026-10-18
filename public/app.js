@@ -1113,18 +1113,11 @@ async function viewChatThread(cid) {
       </div>
       <div id="chat-msgs" class="chat-msgs2"></div>
       <form id="f-chat" class="chat-form2">
-        <button type="button" class="round-btn" id="chat-plus" title="Adjuntar">＋</button>
         <div class="chat-input-wrap">
           <input id="chat-input" placeholder="Escribe un mensaje…" autocomplete="off" maxlength="2000">
-          <button type="button" class="ci-btn" id="chat-emoji" title="Emoji">😊</button>
-          <button type="button" class="ci-btn" id="chat-camera" title="Tomar foto">📷</button>
-          <button type="button" class="ci-btn" id="chat-photo" title="Elegir foto">🖼️</button>
         </div>
         <button class="round-btn send" type="submit" title="Enviar">➤</button>
       </form>
-      <div id="chat-preview" class="chat-preview" style="display:none">
-        <img id="chat-preview-img"><button type="button" id="chat-preview-x">✕</button>
-      </div>
       </div>`;
     const box = $('#chat-msgs');
     const appendMsgs = msgs => {
@@ -1145,57 +1138,17 @@ async function viewChatThread(cid) {
       } catch (e) {}
     }, 4000);
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
-    // Adjuntar foto/video en el chat
-    let chatMediaFile = null;
-    const pickChatMedia = (useCamera) => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*,video/*';
-      if (useCamera) input.setAttribute('capture', 'environment');
-      input.onchange = () => {
-        if (!input.files[0]) return;
-        chatMediaFile = input.files[0];
-        const prev = $('#chat-preview'), pimg = $('#chat-preview-img');
-        if (chatMediaFile.type.startsWith('image/')) {
-          pimg.src = URL.createObjectURL(chatMediaFile);
-          pimg.style.display = '';
-          prev.style.display = 'flex';
-        } else {
-          pimg.style.display = 'none';
-          prev.style.display = 'flex';
-          prev.querySelector('span.pv-label')?.remove();
-          prev.insertAdjacentHTML('afterbegin', '<span class="pv-label">📹 Video listo para enviar</span>');
-        }
-      };
-      input.click();
-    };
-    $('#chat-camera').addEventListener('click', () => pickChatMedia(true));
-    $('#chat-photo').addEventListener('click', () => pickChatMedia(false));
-    $('#chat-plus').addEventListener('click', () => pickChatMedia(false));
-    $('#chat-emoji').addEventListener('click', () => { const i = $('#chat-input'); i.value += '😊'; i.focus(); });
-    $('#chat-preview-x').addEventListener('click', () => {
-      chatMediaFile = null;
-      $('#chat-preview').style.display = 'none';
-      $('#chat-preview-img').src = '';
-    });
     $('#f-chat').addEventListener('submit', async e => {
       e.preventDefault();
       const inp = $('#chat-input');
       const text = inp.value.trim();
-      if (!text && !chatMediaFile) return;
+      if (!text) return;
       inp.value = '';
-      $('#chat-preview').style.display = 'none';
       try {
-        const fd = new FormData();
-        fd.append('text', text);
-        if (chatMediaFile) {
-          if (chatMediaFile.type.startsWith('video/')) await checkVideoDuration(fd);
-          fd.append('media', chatMediaFile);
-        }
-        await compressFormImages(fd, 1280, 0.82);
-        const { message } = await apiForm(`/api/chat/conversations/${cid}/messages`, fd);
+        const { message } = await api(`/api/chat/conversations/${cid}/messages`, {
+          method: 'POST', body: JSON.stringify({ text })
+        });
         appendMsgs([message]);
-        chatMediaFile = null;
       } catch (err) { toast(err.message); inp.value = text; }
     });
   } catch (err) {
