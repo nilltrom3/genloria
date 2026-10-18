@@ -1,6 +1,33 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+<script>
+// Forzador de actualización: si la versión del servidor es mayor, limpia caché y recarga
+(function() {
+  var CV = 39;
+  try {
+    var sv = parseInt(localStorage.getItem('genloria_v') || '0', 10);
+    fetch('/api/version', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.v > CV || d.v > sv) {
+        localStorage.setItem('genloria_v', String(d.v));
+        if (d.v > CV && 'serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
+              caches.keys().then(function(keys) {
+                Promise.all(keys.map(function(k) { return caches.delete(k); })).then(function() {
+                  location.reload(true);
+                });
+              });
+            });
+          });
+        } else {
+          localStorage.setItem('genloria_v', String(d.v));
+        }
+      }
+    }).catch(function() {});
+  } catch (e) {}
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>GENLORIA — Generaciones conectadas. Historias que perduran.</title>
