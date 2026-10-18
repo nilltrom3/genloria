@@ -661,28 +661,30 @@ input[type=file] { display: none; }
 .chat-form2 { flex-shrink: 0; }
 .chat-preview { flex-shrink: 0; }
 
-/* Historias: diseño exacto por capas (foto + aro dorado + hojas) */
+/* Historias: diseño por capas (foto + aro dorado + hojas) - tamaño controlado */
+.story-tree { width: 88px; }
 .story-exact {
-  position: relative; width: 92px; height: 104px; display: block; margin: 0 auto;
+  position: relative; width: 88px; height: 96px; display: block; margin: 0 auto;
+  overflow: visible;
 }
 .story-exact .se-photo {
-  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
-  width: 66px; height: 66px; border-radius: 50%; object-fit: cover;
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  width: 60px; height: 60px; border-radius: 50%; object-fit: cover;
   background: #22344f;
 }
 .story-exact .se-ring {
-  position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
-  width: 72px; height: 72px; border-radius: 50%;
-  border: 3.5px solid #d4a017;
-  box-shadow: 0 0 6px rgba(212,160,23,.6), inset 0 0 4px rgba(212,160,23,.3);
+  position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
+  width: 66px; height: 66px; border-radius: 50%;
+  border: 3px solid #d4a017;
+  box-shadow: 0 0 5px rgba(212,160,23,.5);
   pointer-events: none;
 }
 .story-exact .se-leaves {
-  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-  width: 104px; height: 116px; object-fit: contain; pointer-events: none;
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 88px; height: 96px; object-fit: contain; pointer-events: none;
 }
 .story-exact .se-plus {
-  position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
-  width: 66px; height: 66px; border-radius: 50%; background: #1a6fd4;
-  color: #fff; font-size: 2rem; display: flex; align-items: center; justify-content: center;
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  width: 60px; height: 60px; border-radius: 50%; background: #1a6fd4;
+  color: #fff; font-size: 1.8rem; display: flex; align-items: center; justify-content: center;
 }
