@@ -155,6 +155,12 @@ router.post('/register', authLimiter, (req, res) => {
     if (err) return res.status(500).json({ error: 'Cuenta creada, pero falló la sesión. Inicia sesión.' });
     req.session.userId = user.id;
     const famInfo = db.prepare('SELECT id, name, invite_code FROM families WHERE id = ?').get(familyId);
+    // Correo de bienvenida (no bloquea el registro si falla)
+    try {
+      const { sendEmail, welcomeEmail } = require('../email');
+      const msg = welcomeEmail(user.name, famInfo ? famInfo.name : null);
+      sendEmail({ to: user.email, subject: msg.subject, html: msg.html }).catch(() => {});
+    } catch (e) { console.log('[email] no se pudo enviar bienvenida:', e.message); }
     res.status(201).json({ user: publicUser(user), family: famInfo });
   });
 });
