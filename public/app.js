@@ -516,6 +516,8 @@ function viewRegister() {
       } else {
         toast('¡Bienvenido a la familia! 🎉');
       }
+      // Notificaciones activadas por defecto: pedir permiso al registrarse
+      try { await requestPushPermission(); } catch {}
       viewClaimIdentity(); // paso 2: ¿ya estás en el árbol?
     } catch (err) {
       $('#err').textContent = err.message;
@@ -1136,11 +1138,38 @@ async function viewProfile(username) {
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
     const pb = $('#btn-push');
     if (pb) {
-      // Ocultar si ya están activadas
-      if ('Notification' in window && Notification.permission === 'granted') pb.style.display = 'none';
-      pb.addEventListener('click', () => requestPushPermission().then(() => {
-        if (Notification.permission === 'granted') pb.style.display = 'none';
-      }));
+      // Mostrar estado actual: activar o desactivar
+      const updatePushBtn = async () => {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.getSubscription();
+          const active = sub && Notification.permission === 'granted';
+          pb.textContent = active ? '🔕 Desactivar notificaciones' : '🔔 Activar notificaciones';
+          pb.dataset.active = active ? '1' : '0';
+        } catch { pb.textContent = '🔔 Activar notificaciones'; }
+      };
+      updatePushBtn();
+      pb.addEventListener('click', async () => {
+        if (pb.dataset.active === '1') {
+          // Desactivar: eliminar suscripción
+          try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) {
+              await fetch('/api/auth/push-unsubscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: sub.endpoint })
+              });
+              await sub.unsubscribe();
+            }
+            toast('Notificaciones desactivadas');
+          } catch (e) { toast('Error al desactivar'); }
+        } else {
+          await requestPushPermission();
+        }
+        updatePushBtn();
+      });
     }
     $('#btn-ficha').onclick = () => openPersonSheet(user.id, 'view');
     const lo = $('#app [data-logout]');

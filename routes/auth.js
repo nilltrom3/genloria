@@ -261,4 +261,14 @@ router.post('/push-subscribe', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Eliminar suscripción push (desactivar)
+router.post('/push-unsubscribe', requireAuth, (req, res) => {
+  const { endpoint } = req.body || {};
+  if (endpoint) {
+    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?')
+      .run(req.session.userId, endpoint);
+  }
+  res.json({ ok: true });
+});
+
 module.exports = { router, publicUser, issueRecoveryCode, validEmail, cleanPersonFields, PERSON_FIELDS };
