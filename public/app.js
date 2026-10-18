@@ -678,9 +678,15 @@ function storyBarHTML() {
   const frame = '/icons/story-tree-frame.png';
   // Foto circular con el marco del árbol GENLORIA encima
   const framedPhoto = (story, user, alt) => {
-    const media = story.media_type === 'video'
-      ? `<video class="tf-photo" src="${esc(story.media_path)}" muted playsinline preload="metadata"></video>`
-      : `<img class="tf-photo" src="${esc(story.media_path)}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">`;
+    const avatarFallback = user.avatar_path ? esc(user.avatar_path) : '/icons/avatar-default.svg';
+    let media;
+    if (story.media_path) {
+      media = story.media_type === 'video'
+        ? `<video class="tf-photo" src="${esc(story.media_path)}" muted playsinline preload="metadata" onerror="this.outerHTML='<img class=&quot;tf-photo&quot; src=&quot;${avatarFallback}&quot;>'"></video>`
+        : `<img class="tf-photo" src="${esc(story.media_path)}" alt="${alt}" onerror="this.src='${avatarFallback}'">`;
+    } else {
+      media = `<img class="tf-photo" src="${avatarFallback}" alt="${alt}" onerror="this.src='/icons/avatar-default.svg'">`;
+    }
     return `<span class="tree-frame-wrap">${media}<img class="tf-frame" src="${frame}" alt=""></span>`;
   };
   let html = `<div class="stories-bar">`;
@@ -1103,6 +1109,7 @@ async function viewChatThread(cid) {
     other = data.other;
     if (!other) { location.hash = '#/chat'; return; }
     app.innerHTML = `
+      <div class="chat-view">
       <div class="chat-head2">
         <button class="icon-btn" data-go="#/chat">‹</button>
         <span class="ch-av">${avatarHTML(other, 'avatar sm')}<span class="online-dot"></span></span>
@@ -1126,6 +1133,7 @@ async function viewChatThread(cid) {
       </form>
       <div id="chat-preview" class="chat-preview" style="display:none">
         <img id="chat-preview-img"><button type="button" id="chat-preview-x">✕</button>
+      </div>
       </div>`;
     const box = $('#chat-msgs');
     const appendMsgs = msgs => {
