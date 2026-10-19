@@ -343,22 +343,49 @@ router.delete('/admin/invite-codes/:id', requireAuth, requireAdmin, (req, res) =
   res.json({ ok: true });
 });
 
-// Enviar correo de bienvenida a todos los miembros registrados de mi familia (solo admin)
+// Enviar correo de bienvenida personalizado (nombre + familia de CADA persona).
+// Alcance: 'family' (mi familia, cualquier admin) o 'platform' (toda la plataforma, solo superadmin).
 router.post('/admin/broadcast-welcome', requireAuth, requireAdmin, async (req, res) => {
   if (!emailer.configured()) return res.status(400).json({ error: 'El servicio de correo no está configurado.' });
-  const myFam = db.getFamilyId(req.session.userId);
-  const fam = db.prepare('SELECT name FROM families WHERE id = ?').get(myFam);
-  const familyName = fam ? fam.name : 'tu familia';
-  const members = db.prepare("SELECT id, name, email FROM users WHERE family_id = ? AND email IS NOT NULL AND TRIM(email) != ''").all(myFam);
+  const me = db.prepare('SELECT is_superadmin FROM users WHERE id = ?').get(req.session.userId);
+  const scope = (req.body && req.body.scope === 'platform' && me && me.is_superadmin) ? 'platform' : 'family';
+  let members;
+  if (scope === 'platform') {
+    members = db.prepare("SELECT id, name, email, family_id FROM users WHERE email IS NOT NULL AND TRIM(email) != ''").all();
+  } else {
+    const myFam = db.getFamilyId(req.session.userId);
+    members = db.prepare("SELECT id, name, email, family_id FROM users WHERE family_id = ? AND email IS NOT NULL AND TRIM(email) != ''").all(myFam);
+  }
+  // Nombre de la familia de CADA destinatario (no uno solo para todos)
+  const famNames = {};
+  function famName(fid) {
+    if (!(fid in famNames)) {
+      const f = db.prepare('SELECT name FROM families WHERE id = ?').get(fid);
+      famNames[fid] = f ? f.name : 'tu familia';
+    }
+    return famNames[fid];
+  }
   let sent = 0, failed = 0;
   const failures = [];
   for (const m of members) {
-    const w = emailer.welcomeEmail(m.name, familyName);
+    const w = emailer.welcomeEmail(m.name, famName(m.family_id));
     const r = await emailer.sendEmail({ to: m.email, subject: w.subject, html: w.html });
     if (r.ok) sent++; else { failed++; failures.push(m.email); }
     await new Promise(r2 => setTimeout(r2, 400));
   }
-  res.json({ total: members.length, sent, failed, failures });
+  res.json({ total: members.length, sent, failed, failures, scope });
+});
+
+// Conteo de destinatarios para la pestaña Correos
+router.get('/admin/broadcast-counts', requireAuth, requireAdmin, (req, res) => {
+  const me = db.prepare('SELECT is_superadmin FROM users WHERE id = ?').get(req.session.userId);
+  const myFam = db.getFamilyId(req.session.userId);
+  const family = db.prepare("SELECT COUNT(*) c FROM users WHERE family_id = ? AND email IS NOT NULL AND TRIM(email) != ''").get(myFam).c;
+  let platform = null;
+  if (me && me.is_superadmin) {
+    platform = db.prepare("SELECT COUNT(*) c FROM users WHERE email IS NOT NULL AND TRIM(email) != ''").get().c;
+  }
+  res.json({ family, platform });
 });
 
 module.exports = router;

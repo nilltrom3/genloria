@@ -2321,23 +2321,38 @@ async function viewAdmin(tab) {
       if (el) el.classList.toggle('active', t === name);
     });
   }
-  function showMail() {
-    const withMail = users.filter(u => u.email && u.email.trim());
+  async function showMail() {
+    body.innerHTML = `<h3 style="margin-top:0">📧 Correo de bienvenida</h3><p class="sub">Cargando…</p>`;
+    let counts = { family: 0, platform: null };
+    try { counts = await api('/api/users/admin/broadcast-counts'); } catch (e) { /* sigue con 0 */ }
+    const canPlatform = counts.platform !== null && counts.platform !== undefined;
     body.innerHTML = `
       <h3 style="margin-top:0">📧 Correo de bienvenida</h3>
-      <p class="sub">Envía el correo de bienvenida (diseño elegante) a cada miembro registrado de tu familia, personalizado con su nombre.</p>
+      <p class="sub">Envía el correo de bienvenida (diseño elegante) personalizado: <b>cada persona recibe su propio nombre y el nombre de la familia a la que pertenece</b>.</p>
+      ${canPlatform ? `
+      <label>¿A quién enviarlo?</label>
+      <select id="mail-scope" style="margin-bottom:12px">
+        <option value="family">Mi familia (${counts.family} con correo)</option>
+        <option value="platform">Toda la plataforma (${counts.platform} con correo)</option>
+      </select>` : `
       <div class="card" style="border-color:var(--accent)">
-        <b>${withMail.length} miembro(s)</b> tienen correo registrado y lo recibirán.
-      </div>
+        <b>${counts.family} miembro(s)</b> de tu familia tienen correo registrado y lo recibirán.
+      </div>`}
       <button class="btn" id="btn-broadcast" style="margin-top:12px">✉️ Enviar a todos ahora</button>
       <div id="broadcast-result" style="margin-top:12px"></div>`;
     $('#btn-broadcast').addEventListener('click', async () => {
-      if (!withMail.length) { toast('No hay miembros con correo registrado.'); return; }
-      if (!confirm(`¿Enviar el correo de bienvenida a ${withMail.length} miembro(s)?\n\nCada uno lo recibe con su propio nombre.`)) return;
+      const scope = canPlatform ? $('#mail-scope').value : 'family';
+      const n = scope === 'platform' ? counts.platform : counts.family;
+      const label = scope === 'platform' ? 'toda la plataforma' : 'tu familia';
+      if (!n) { toast('No hay miembros con correo registrado.'); return; }
+      if (!confirm(`¿Enviar el correo de bienvenida a ${n} miembro(s) de ${label}?\n\nCada uno lo recibe con su propio nombre y su familia.`)) return;
       const btn = $('#btn-broadcast');
       btn.disabled = true; btn.textContent = 'Enviando…';
       try {
-        const r = await api('/api/users/admin/broadcast-welcome', { method: 'POST' });
+        const r = await api('/api/users/admin/broadcast-welcome', {
+          method: 'POST',
+          body: JSON.stringify({ scope })
+        });
         $('#broadcast-result').innerHTML = `<div class="card" style="border-color:#2e7d32">
           <b>✅ Enviados: ${r.sent} de ${r.total}</b>
           ${r.failed ? `<br><small style="color:#f87171">Fallaron: ${r.failed} (${esc((r.failures || []).join(', '))})</small>` : ''}</div>`;
