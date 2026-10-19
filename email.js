@@ -73,7 +73,7 @@ function welcomeEmail(name, familyName) {
           </p>
           <p>Atentamente,<br><b>El equipo de GENLORIA</b></p>
         </div>
-        <div style="padding:16px;background:#f7f7f7;text-align:center;color:#999;font-size:12px;">Una creación de Nilltrom · genloria.com</div>
+        <div style="padding:16px;background:#f7f7f7;text-align:center;color:#999;font-size:12px;">¿Quieres contactar a GENLORIA? Escríbenos a <a href="mailto:info@genloria.com" style="color:#0b2b4f;font-weight:bold;">info@genloria.com</a><br>Una creación de Nilltrom · genloria.com</div>
       </div>
     </body></html>`
   };
