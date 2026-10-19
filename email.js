@@ -52,24 +52,27 @@ function welcomeEmail(name, familyName) {
     subject: `¡Bienvenido a GENLORIA, ${safeName}! 🌳`,
     html: `<!DOCTYPE html><html><body style="margin:0;font-family:Arial,sans-serif;background:#f4f4f4;">
       <div style="max-width:560px;margin:0 auto;background:#ffffff;">
-        ${BRAND_HEAD}
-        <div style="padding:28px 24px;color:#333;font-size:15px;line-height:1.6;">
-          <p>Hola <b>${safeName}</b>,</p>
-          <p>¡Te damos la bienvenida a <b>GENLORIA</b>! 🎉</p>
-          <p>Ya eres parte de <b>${safeFam}</b>. Aquí podrás:</p>
-          <ul>
-            <li>📸 Compartir fotos y recuerdos con tu familia</li>
-            <li>🌳 Explorar tu árbol genealógico</li>
-            <li>📖 Guardar las historias de tus generaciones</li>
-            <li>💬 Conversar en privado con tus familiares</li>
-          </ul>
-          <p style="text-align:center;margin:28px 0;">
-            <a href="https://genloria.com" style="background:#d4a017;color:#0b2b4f;font-weight:bold;
-               padding:14px 32px;border-radius:8px;text-decoration:none;">Entrar a GENLORIA</a>
-          </p>
-          <p>Porque el mejor legado que podemos dejar es que nuestra historia nunca sea olvidada.</p>
+        <div style="background:#0b2b4f;padding:30px 24px;text-align:center;">
+          <div style="font-size:28px;font-weight:bold;color:#d4a017;letter-spacing:3px;">GENLORIA</div>
+          <div style="color:#ffffff;font-size:13px;margin-top:8px;letter-spacing:1px;">Generaciones conectadas. Historias que perduran.</div>
+          <div style="width:60px;height:3px;background:#d4a017;margin:16px auto 0;"></div>
         </div>
-        ${BRAND_FOOT}
+        <div style="padding:30px 26px;background:#ffffff;font-size:15px;line-height:1.7;color:#333;">
+          <p>Estimado/a <b>${safeName}</b>,</p>
+          <p>Es un honor darle la bienvenida a <b>GENLORIA</b>, el espacio privado donde su familia preservará su historia para las futuras generaciones.</p>
+          <p>Usted ahora forma parte de <b>${safeFam}</b>, donde podrá:</p>
+          <ul style="color:#0b2b4f;">
+            <li>Explorar su árbol genealógico interactivo</li>
+            <li>Compartir fotografías y recuerdos familiares</li>
+            <li>Preservar las historias de sus seres queridos</li>
+            <li>Conversar en privado con sus familiares</li>
+          </ul>
+          <p style="text-align:center;margin:30px 0;">
+            <a href="https://genloria.com" style="background:#0b2b4f;color:#d4a017;font-weight:bold;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:16px;">Entrar a GENLORIA</a>
+          </p>
+          <p>Atentamente,<br><b>El equipo de GENLORIA</b></p>
+        </div>
+        <div style="padding:16px;background:#f7f7f7;text-align:center;color:#999;font-size:12px;">Una creación de Nilltrom · genloria.com</div>
       </div>
     </body></html>`
   };
