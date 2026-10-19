@@ -63,6 +63,14 @@ router.post('/', requireAuth, upload.single('media'), (req, res) => {
   const info = db.prepare(
     "INSERT INTO stories (user_id, media_path, media_type, family_id, expires_at) VALUES (?,?,?,?, datetime('now', '+24 hours'))"
   ).run(req.session.userId, '/uploads/' + path.basename(req.file.path), type, fid);
+  // Notificar a la familia
+  const author = db.prepare('SELECT name FROM users WHERE id = ?').get(req.session.userId);
+  const { sendPushToFamily } = require('../push');
+  sendPushToFamily(fid, req.session.userId, {
+    title: `✨ ${author.name} publicó una historia`,
+    body: type === 'video' ? 'Mira su video antes de que se borre' : 'Mira su foto antes de que se borre',
+    url: '/#/feed'
+  }).catch(() => {});
   res.status(201).json({ story: { id: info.lastInsertRowid } });
 });
 
