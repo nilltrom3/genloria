@@ -1021,10 +1021,11 @@ function renderStory() {
   const del = $('#s-del');
   if (del) del.onclick = async () => {
     if (!confirm('¿Borrar esta historia definitivamente?')) return;
+    const cb = storyState && storyState.onDelete;
     try {
       await api(`/api/stories/${s.id}`, { method: 'DELETE' });
       closeStoryViewer();
-      if (storyState && storyState.onDelete) storyState.onDelete(s.id);
+      if (cb) cb(s.id);
       else viewFeed();
     }
     catch (e) { toast(e.message); }
@@ -1924,6 +1925,14 @@ function personViewHTML(person, t, isAdmin) {
       <button class="pv-act" id="pv-tree"><span>🌳</span>Ver en árbol</button>
       <button class="pv-act" id="pv-print"><span>🖨️</span>Imprimir</button>
     </div>
+    <div class="pv-card pv-mem" id="pv-mem">
+      <div class="pv-mem-head" id="pv-mem-head">
+        <span class="pv-card-ic pv-mem-ic">🖼️</span><b>Historias y recuerdos</b>
+        <span class="pv-mem-chev">›</span>
+      </div>
+      <div class="pv-mem-prev" id="pv-mem-prev"><p class="sub">Cargando…</p></div>
+      <button class="pv-mem-all hidden" id="pv-mem-all">Ver todas las historias →</button>
+    </div>
     ${infoRows.length ? `
     <div class="pv-card">
       <div class="pv-card-head"><span class="pv-card-ic">👤</span><b>Información personal</b>
@@ -1978,6 +1987,102 @@ function wirePersonView(person, t, isAdmin) {
   if (tree) tree.onclick = () => { closeSheet(); location.hash = '#/tree'; };
   const photo = $('#pv-photo');
   if (photo) photo.onclick = () => { closeSheet(); openPersonSheet(person.id, 'edit'); };
+  loadMemoriesSection(person);
+}
+
+// ---------- Historias y recuerdos en la ficha personal ----------
+// Vista previa de las 3 historias archivadas más recientes + acceso al archivo completo.
+async function loadMemoriesSection(person) {
+  const card = $('#pv-mem');
+  if (!card) return;
+  const prev = $('#pv-mem-prev');
+  const allBtn = $('#pv-mem-all');
+  const emptyMsg = '<p class="sub">Todavía no hay recuerdos compartidos.</p>';
+  // Sin cuenta vinculada no hay historias que mostrar (no se atribuye nada ajeno)
+  if (person.is_placeholder || !person.username) { prev.innerHTML = emptyMsg; return; }
+  try {
+    const { stories } = await api(`/api/stories/archive/${person.id}`);
+    if (!stories.length) { prev.innerHTML = emptyMsg; return; }
+    prev.innerHTML = `<div class="pv-mem-grid">${stories.slice(0, 3).map(s => `
+      <button class="pv-mem-thumb" data-mem="${s.id}" aria-label="Ver historia">
+        <img src="${esc(s.media_path)}" alt="" loading="lazy" onerror="this.style.opacity=.3">
+      </button>`).join('')}</div>`;
+    allBtn.classList.remove('hidden');
+    const owner = { id: person.id, name: person.name, avatar_path: person.avatar_path };
+    const openAt = (id) => {
+      const idx = Math.max(0, stories.findIndex(x => String(x.id) === String(id)));
+      openArchiveViewer(stories, owner, idx, () => openMemoriesArchive(person));
+    };
+    prev.querySelectorAll('[data-mem]').forEach(b => b.addEventListener('click', () => openAt(b.dataset.mem)));
+    const openAll = () => openMemoriesArchive(person);
+    allBtn.addEventListener('click', openAll);
+    $('#pv-mem-head').addEventListener('click', openAll);
+  } catch (e) {
+    // 403 (archivo privado) u otro error: ocultar la tarjeta discretamente
+    card.style.display = 'none';
+  }
+}
+
+// Pantalla independiente con el archivo completo: cuadrícula por año y mes,
+// fecha original, pantalla completa al tocar, reacciones y privacidad respetadas.
+async function openMemoriesArchive(person) {
+  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const MESES_CORTOS = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'sept.', 'oct.', 'nov.', 'dic.'];
+  const fechaCorta = (s) => {
+    const d = new Date(s.created_at.replace(' ', 'T'));
+    return isNaN(d) ? '' : `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}`;
+  };
+  let ov = $('#mem-archive');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'mem-archive';
+    ov.className = 'mem-archive hidden';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `
+    <div class="mem-top">
+      <button class="mem-back" id="mem-back" aria-label="Volver">‹</button>
+      <div class="grow"><b>🖼️ Historias y recuerdos</b><br><small class="uname">${esc(person.name)}</small></div>
+    </div>
+    <div class="mem-body" id="mem-body"><p class="sub" style="text-align:center;padding:30px">Cargando…</p></div>`;
+  ov.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  const close = () => { ov.classList.add('hidden'); document.body.style.overflow = ''; };
+  $('#mem-back').onclick = close;
+  try {
+    const { stories } = await api(`/api/stories/archive/${person.id}`);
+    const body = $('#mem-body');
+    if (!stories.length) { body.innerHTML = '<p class="sub" style="text-align:center;padding:30px">Todavía no hay recuerdos compartidos.</p>'; return; }
+    const groups = {};
+    stories.forEach(s => {
+      const d = new Date(s.created_at.replace(' ', 'T'));
+      const k = isNaN(d) ? '0000-00' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      (groups[k] = groups[k] || []).push(s);
+    });
+    const keys = Object.keys(groups).sort().reverse();
+    body.innerHTML = keys.map(k => {
+      const [y, m] = k.split('-');
+      const label = k === '0000-00' ? 'Sin fecha' : `${y} · ${MESES[+m - 1]}`;
+      return `<h4 class="arc-month">${label}</h4>
+        <div class="arc-grid">${groups[k].map(s => `
+          <div class="arc-item">
+            <button class="arc-thumb" data-mfull="${s.id}" title="${esc(fmtDateTime(s.created_at))}">
+              <img src="${esc(s.media_path)}" alt="" loading="lazy" onerror="this.style.opacity=.3">
+              ${s.reaction_count ? `<span class="arc-badge">❤️ ${s.reaction_count}</span>` : ''}
+            </button>
+            <div class="arc-date">${fechaCorta(s)}</div>
+          </div>`).join('')}</div>`;
+    }).join('');
+    const flat = keys.flatMap(k => groups[k]);
+    const owner = { id: person.id, name: person.name, avatar_path: person.avatar_path };
+    body.querySelectorAll('[data-mfull]').forEach(b => b.addEventListener('click', () => {
+      const idx = Math.max(0, flat.findIndex(s => String(s.id) === b.dataset.mfull));
+      openArchiveViewer(flat, owner, idx, () => openMemoriesArchive(person));
+    }));
+  } catch (e) {
+    close();
+    toast('No se pudo abrir el archivo.');
+  }
 }
 
 async function openPersonSheet(userId, mode) {

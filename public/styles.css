@@ -181,7 +181,7 @@ textarea { min-height: 110px; resize: vertical; }
 
 /* Visor de historias */
 #story-viewer {
-  position: fixed; inset: 0; z-index: 50; background: #000;
+  position: fixed; inset: 0; z-index: 70; background: #000;
   display: flex; flex-direction: column;
 }
 #story-viewer .s-top {
@@ -282,7 +282,7 @@ textarea { min-height: 110px; resize: vertical; }
 #toast {
   position: fixed; bottom: calc(var(--nav-h) + 20px); left: 50%; transform: translateX(-50%);
   background: #1f2937; color: #fff; padding: 12px 20px; border-radius: 24px;
-  font-size: .9rem; z-index: 60; max-width: 90vw; text-align: center;
+  font-size: .9rem; z-index: 90; max-width: 90vw; text-align: center;
 }
 .preview img, .preview video { width: 100%; border-radius: 10px; margin-top: 10px; max-height: 40vh; object-fit: contain; background: #000; }
 .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
@@ -840,3 +840,40 @@ input[type=file] { display: none; }
 .pv-val { color: var(--text); flex: 1; text-align: left; }
 .pv-foot { display: flex; gap: 10px; padding: 4px 12px 8px; }
 .pv-foot .btn { flex: 1; }
+
+/* ---------- Historias y recuerdos (ficha personal) ---------- */
+.pv-mem-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.pv-mem-head b { flex: 1; font-size: 1rem; color: #fff; }
+.pv-mem-ic { background: linear-gradient(135deg, #d4a017, #a8842a); }
+.pv-mem-chev { color: var(--muted); font-size: 1.6rem; line-height: 1; padding-right: 2px; }
+.pv-mem-prev { margin-top: 10px; }
+.pv-mem-prev .sub { margin: 2px; }
+.pv-mem-grid { display: flex; gap: 10px; }
+.pv-mem-thumb {
+  flex: 1 1 0; aspect-ratio: 1; border: 0; border-radius: 14px; overflow: hidden;
+  padding: 0; cursor: pointer; background: #22344f; min-width: 0;
+}
+.pv-mem-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pv-mem-all {
+  margin-top: 10px; background: none; border: 0; cursor: pointer;
+  color: var(--muted); font-size: .9rem; padding: 4px 2px;
+}
+.pv-mem-all:active { color: var(--gold); }
+
+/* Pantalla independiente del archivo completo */
+.mem-archive {
+  position: fixed; inset: 0; z-index: 65; background: var(--bg);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+.mem-top {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; background: var(--bg); border-bottom: 1px solid rgba(255,255,255,.07);
+}
+.mem-top .grow { flex: 1; min-width: 0; }
+.mem-top .uname { color: var(--muted); font-size: .85rem; }
+.mem-back {
+  width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(255,255,255,.12); color: #fff; font-size: 1.5rem; line-height: 1;
+  flex-shrink: 0;
+}
+.mem-body { padding: 6px 14px 34px; max-width: 720px; margin: 0 auto; }
