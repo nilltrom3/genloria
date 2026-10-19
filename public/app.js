@@ -1365,7 +1365,7 @@ async function viewProfile(username) {
       ${fichaHTML}
       ${exportHTML}
       ${!user.is_placeholder ? `<div class="card" id="archive-card">
-        <h3 style="margin-top:0">📸 ${isMine ? 'Mis historias' : `Historias de ${esc(user.name.split(' ')[0])}`}</h3>
+        <h3 style="margin-top:0">📸 Archivo de historias</h3>
         ${isMine ? `<label style="font-size:.9rem">👁 Quién puede ver mi archivo:
           <select id="arc-privacy" style="margin-top:6px">
             <option value="family">Mi familia</option>
@@ -1469,6 +1469,11 @@ async function loadArchiveSection(user, isMine) {
   const box = $('#archive-grid');
   if (!box) return;
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  const MESES_CORTOS = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'sept.', 'oct.', 'nov.', 'dic.'];
+  const fechaCorta = (s) => {
+    const d = new Date(s.created_at.replace(' ', 'T'));
+    return isNaN(d) ? '' : `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}`;
+  };
   try {
     const url = isMine ? '/api/stories/archive' : `/api/stories/archive/${user.id}`;
     const { stories, privacy } = await api(url);
@@ -1492,13 +1497,16 @@ async function loadArchiveSection(user, isMine) {
     const keys = Object.keys(groups).sort().reverse();
     box.innerHTML = keys.map(k => {
       const [y, m] = k.split('-');
-      const label = k === '0000-00' ? 'Sin fecha' : `${MESES[+m - 1]} ${y}`;
+      const label = k === '0000-00' ? 'Sin fecha' : `${y} · ${MESES[+m - 1]}`;
       return `<h4 class="arc-month">${label}</h4>
         <div class="arc-grid">${groups[k].map(s => `
-          <button class="arc-thumb" data-arc="${s.id}" title="${esc(fmtDateTime(s.created_at))}">
-            <img src="${esc(s.media_path)}" alt="" loading="lazy" onerror="this.style.opacity=.3">
-            ${s.reaction_count ? `<span class="arc-badge">❤️ ${s.reaction_count}</span>` : ''}
-          </button>`).join('')}</div>`;
+          <div class="arc-item">
+            <button class="arc-thumb" data-arc="${s.id}" title="${esc(fmtDateTime(s.created_at))}">
+              <img src="${esc(s.media_path)}" alt="" loading="lazy" onerror="this.style.opacity=.3">
+              ${s.reaction_count ? `<span class="arc-badge">❤️ ${s.reaction_count}</span>` : ''}
+            </button>
+            <div class="arc-date">${fechaCorta(s)}</div>
+          </div>`).join('')}</div>`;
     }).join('');
     const flat = keys.flatMap(k => groups[k]);
     const owner = { id: user.id, name: user.name, avatar_path: user.avatar_path };
