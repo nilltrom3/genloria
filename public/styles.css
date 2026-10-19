@@ -203,6 +203,54 @@ textarea { min-height: 110px; resize: vertical; }
   padding: 18px; font-size: 1.3rem;
 }
 
+/* Reacciones en el visor de historias */
+#story-viewer .s-reactbar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  background: rgba(0,0,0,.55); z-index: 2;
+}
+#story-viewer .s-counts { flex: 1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+#story-viewer .s-rcount {
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); color: #fff;
+  border-radius: 20px; padding: 6px 12px; font-size: .95rem; cursor: pointer;
+}
+#story-viewer .s-noreact { color: rgba(255,255,255,.55); font-size: .85rem; }
+#story-viewer #s-reactbtn {
+  background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); color: #fff;
+  border-radius: 50%; width: 46px; height: 46px; font-size: 1.4rem; flex-shrink: 0;
+}
+#story-viewer .s-emojis {
+  display: flex; justify-content: center; gap: 6px; padding: 10px;
+  background: rgba(0,0,0,.65); z-index: 2;
+}
+#story-viewer .s-emojis button {
+  background: transparent; border: 2px solid transparent; border-radius: 12px;
+  font-size: 1.7rem; padding: 6px; line-height: 1;
+}
+#story-viewer .s-emojis button.mine { border-color: #d4a017; background: rgba(212,160,23,.2); }
+#story-viewer .s-emojis button.pop { animation: spop .35s ease; }
+@keyframes spop { 0% { transform: scale(1); } 40% { transform: scale(1.45); } 100% { transform: scale(1); } }
+#story-viewer .s-reactlist {
+  max-height: 180px; overflow-y: auto; background: rgba(0,0,0,.7);
+  padding: 8px 14px; z-index: 2;
+}
+#story-viewer .s-rrow { display: flex; align-items: center; gap: 10px; padding: 6px 0; color: #fff; }
+#story-viewer .s-rrow .avatar { width: 30px; height: 30px; }
+#story-viewer .s-rrow .grow { flex: 1; font-size: .9rem; }
+#story-viewer .s-re { font-size: 1.3rem; }
+
+/* Archivo de historias en el perfil */
+.arc-month { margin: 16px 0 8px; color: var(--accent); font-size: 1rem; }
+.arc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.arc-thumb {
+  position: relative; aspect-ratio: 1; border: 0; border-radius: 10px; overflow: hidden;
+  background: var(--card); padding: 0; cursor: pointer;
+}
+.arc-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.arc-badge {
+  position: absolute; bottom: 4px; right: 4px; background: rgba(0,0,0,.65); color: #fff;
+  font-size: .72rem; border-radius: 12px; padding: 2px 8px;
+}
+
 /* Perfil */
 .profile-head { text-align: center; padding: 28px 16px 8px; }
 .profile-head .avatar { width: 96px; height: 96px; margin: 0 auto; }

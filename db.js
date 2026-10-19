@@ -136,6 +136,20 @@ if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'is_super
   const first = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get();
   if (first) db.prepare('UPDATE users SET is_superadmin = 1 WHERE id = ?').run(first.id);
 }
+// Reacciones de historias: una por usuario e historia
+db.exec(`CREATE TABLE IF NOT EXISTS story_reactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  story_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  emoji TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(story_id, user_id)
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_story_reactions_story ON story_reactions(story_id)');
+// Privacidad del archivo de historias: 'family' (mi familia) o 'private' (solo yo)
+if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'stories_archive_privacy')) {
+  db.prepare("ALTER TABLE users ADD COLUMN stories_archive_privacy TEXT NOT NULL DEFAULT 'family'").run();
+}
 
 // Crear familia por defecto y asignar datos existentes
 try {

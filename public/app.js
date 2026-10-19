@@ -204,12 +204,15 @@ function compressImageFile(file, maxDim = 1280, quality = 0.82) {
   });
 }
 
-// Reemplaza en el FormData todo archivo de imagen por su versión comprimida
+// Reemplaza en el FormData todo archivo de imagen por su versión comprimida (soporta varios archivos por campo)
 async function compressFormImages(fd, maxDim, quality) {
-  for (const key of [...fd.keys()]) {
-    const v = fd.get(key);
-    if (v instanceof File && v.size > 0 && v.type.startsWith('image/')) {
-      fd.set(key, await compressImageFile(v, maxDim, quality));
+  for (const key of [...new Set(fd.keys())]) {
+    const vals = fd.getAll(key);
+    if (!vals.some(v => v instanceof File && v.size > 0 && v.type.startsWith('image/'))) continue;
+    fd.delete(key);
+    for (const v of vals) {
+      fd.append(key, (v instanceof File && v.size > 0 && v.type.startsWith('image/'))
+        ? await compressImageFile(v, maxDim, quality) : v);
     }
   }
   return fd;
@@ -823,15 +826,16 @@ function renderFeed() {
   const openFilePicker = (useCamera) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*,video/*';
+    input.accept = 'image/*';
+    input.multiple = true;
     if (useCamera) input.setAttribute('capture', 'environment');
     input.onchange = async () => {
-      if (!input.files[0]) return;
+      const files = [...(input.files || [])].slice(0, 10);
+      if (!files.length) return;
       const fd = new FormData();
-      fd.append('media', input.files[0]);
+      files.forEach(f => fd.append('media', f));
       try {
-        toast('Subiendo historia…');
-        await checkVideoDuration(fd);
+        toast(files.length > 1 ? `Subiendo ${files.length} fotos…` : 'Subiendo historia…');
         await compressFormImages(fd, 1280, 0.82);
         await apiForm('/api/stories', fd);
         toast('¡Historia publicada! ✨');
@@ -970,21 +974,40 @@ function closeStoryViewer() {
   document.body.style.overflow = '';
   storyState = null;
 }
+const STORY_EMOJIS = ['❤️', '😂', '🥰', '😮', '🥹', '👏', '😢'];
+
+function openArchiveViewer(stories, user, startIdx, onDelete) {
+  if (!stories.length) return;
+  storyState = { group: { user, stories }, idx: startIdx || 0, archive: true, onDelete };
+  renderStory();
+  $('#story-viewer').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
 function renderStory() {
-  const { group, idx } = storyState;
+  const { group, idx, archive } = storyState;
   const s = group.stories[idx];
   const media = s.media_type === 'video'
     ? `<video src="${esc(s.media_path)}" autoplay playsinline controls></video>`
     : `<img src="${esc(s.media_path)}" alt="historia">`;
   const canDel = me && (group.user.id === me.id || me.role === 'admin');
+  const counts = s.reactions || {};
+  const countsHTML = Object.keys(counts).length
+    ? Object.entries(counts).map(([e, c]) => `<button class="s-rcount">${e} ${c}</button>`).join('')
+    : '<span class="s-noreact">Sé el primero en reaccionar</span>';
   $('#story-viewer').innerHTML = `
     <div class="s-top">
       ${avatarHTML(group.user)}
-      <div class="grow"><b>${esc(group.user.name)}</b><br><small>${timeAgo(s.created_at)} · ${idx + 1}/${group.stories.length}</small></div>
+      <div class="grow"><b>${esc(group.user.name)}</b><br><small>${archive ? fmtDateTime(s.created_at) : timeAgo(s.created_at)} · ${idx + 1}/${group.stories.length}</small></div>
       ${canDel ? `<button id="s-del">🗑</button>` : ''}
       <button id="s-close">✕</button>
     </div>
     <div class="s-media">${media}</div>
+    <div class="s-reactbar">
+      <div class="s-counts" id="s-counts">${countsHTML}</div>
+      <button id="s-reactbtn" title="Reaccionar">${s.my_reaction || '😊'}</button>
+    </div>
+    <div class="s-emojis hidden" id="s-emojis">${STORY_EMOJIS.map(e => `<button data-emoji="${e}" class="${s.my_reaction === e ? 'mine' : ''}" title="${e}">${e}</button>`).join('')}</div>
+    <div class="s-reactlist hidden" id="s-reactlist"></div>
     <div class="s-nav">
       <button id="s-prev">‹</button>
       <button id="s-next">›</button>
@@ -997,9 +1020,47 @@ function renderStory() {
   };
   const del = $('#s-del');
   if (del) del.onclick = async () => {
-    if (!confirm('¿Borrar esta historia?')) return;
-    try { await api(`/api/stories/${s.id}`, { method: 'DELETE' }); closeStoryViewer(); viewFeed(); }
+    if (!confirm('¿Borrar esta historia definitivamente?')) return;
+    try {
+      await api(`/api/stories/${s.id}`, { method: 'DELETE' });
+      closeStoryViewer();
+      if (storyState && storyState.onDelete) storyState.onDelete(s.id);
+      else viewFeed();
+    }
     catch (e) { toast(e.message); }
+  };
+  const refreshReactions = async () => {
+    try {
+      const { reactions } = await api(`/api/stories/${s.id}/reactions`);
+      const c = {};
+      reactions.forEach(r => { c[r.emoji] = (c[r.emoji] || 0) + 1; });
+      const mine = me && reactions.find(r => r.uid === me.id);
+      s.reactions = c;
+      s.my_reaction = mine ? mine.emoji : null;
+      s.reaction_count = reactions.length;
+      renderStory();
+    } catch {}
+  };
+  $('#s-reactbtn').onclick = () => $('#s-emojis').classList.toggle('hidden');
+  $('#s-emojis').querySelectorAll('[data-emoji]').forEach(b => b.onclick = async () => {
+    const e = b.dataset.emoji;
+    b.classList.add('pop');
+    try {
+      if (s.my_reaction === e) await api(`/api/stories/${s.id}/react`, { method: 'DELETE' });
+      else await api(`/api/stories/${s.id}/react`, { method: 'POST', body: JSON.stringify({ emoji: e }) });
+      await refreshReactions();
+    } catch (err) { toast(err.message); }
+  });
+  $('#s-counts').onclick = async () => {
+    const box = $('#s-reactlist');
+    if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+    try {
+      const { reactions } = await api(`/api/stories/${s.id}/reactions`);
+      box.innerHTML = reactions.length
+        ? reactions.map(r => `<div class="s-rrow">${avatarHTML({ avatar_path: r.avatar_path })}<span class="grow">${esc(r.name)}</span><span class="s-re">${r.emoji}</span></div>`).join('')
+        : '<p class="sub">Aún no hay reacciones.</p>';
+      box.classList.remove('hidden');
+    } catch (e) { toast(e.message); }
   };
 }
 
@@ -1303,6 +1364,15 @@ async function viewProfile(username) {
       </div>
       ${fichaHTML}
       ${exportHTML}
+      ${!user.is_placeholder ? `<div class="card" id="archive-card">
+        <h3 style="margin-top:0">📸 ${isMine ? 'Mis historias' : `Historias de ${esc(user.name.split(' ')[0])}`}</h3>
+        ${isMine ? `<label style="font-size:.9rem">👁 Quién puede ver mi archivo:
+          <select id="arc-privacy" style="margin-top:6px">
+            <option value="family">Mi familia</option>
+            <option value="private">Solo yo</option>
+          </select></label>` : ''}
+        <div id="archive-grid" style="margin-top:10px"><p class="sub">Cargando…</p></div>
+      </div>` : ''}
       <div class="menu-list">
         ${isMine ? `<button data-go="#/settings">✏️ Editar mi perfil</button>` : ''}
         ${me && me.role === 'admin' ? `<button data-go="#/admin">🛠 Administración</button>` : ''}
@@ -1387,8 +1457,58 @@ async function viewProfile(username) {
       await api('/api/auth/logout', { method: 'POST' });
       me = null; location.hash = '#/login';
     });
+    // Sección «Mis historias» (archivo)
+    if (!user.is_placeholder) loadArchiveSection(user, isMine);
   } catch (e) {
     app.innerHTML = `${topbar('Perfil')}<div class="empty">No se encontró ese perfil.</div>`;
+  }
+}
+
+// Archivo de historias en el perfil: cuadrícula por año/mes, pantalla completa, privacidad
+async function loadArchiveSection(user, isMine) {
+  const box = $('#archive-grid');
+  if (!box) return;
+  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  try {
+    const url = isMine ? '/api/stories/archive' : `/api/stories/archive/${user.id}`;
+    const { stories, privacy } = await api(url);
+    const sel = $('#arc-privacy');
+    if (sel && privacy) {
+      sel.value = privacy;
+      sel.addEventListener('change', async () => {
+        try {
+          await api('/api/stories/archive-privacy', { method: 'PUT', body: JSON.stringify({ privacy: sel.value }) });
+          toast(sel.value === 'private' ? 'Tu archivo ahora es solo para ti 🔒' : 'Tu familia puede ver tu archivo 👪');
+        } catch (e) { toast(e.message); }
+      });
+    }
+    if (!stories.length) { box.innerHTML = '<p class="sub">Aún no hay historias archivadas.</p>'; return; }
+    const groups = {};
+    stories.forEach(s => {
+      const d = new Date(s.created_at.replace(' ', 'T'));
+      const k = isNaN(d) ? '0000-00' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      (groups[k] = groups[k] || []).push(s);
+    });
+    const keys = Object.keys(groups).sort().reverse();
+    box.innerHTML = keys.map(k => {
+      const [y, m] = k.split('-');
+      const label = k === '0000-00' ? 'Sin fecha' : `${MESES[+m - 1]} ${y}`;
+      return `<h4 class="arc-month">${label}</h4>
+        <div class="arc-grid">${groups[k].map(s => `
+          <button class="arc-thumb" data-arc="${s.id}" title="${esc(fmtDateTime(s.created_at))}">
+            <img src="${esc(s.media_path)}" alt="" loading="lazy" onerror="this.style.opacity=.3">
+            ${s.reaction_count ? `<span class="arc-badge">❤️ ${s.reaction_count}</span>` : ''}
+          </button>`).join('')}</div>`;
+    }).join('');
+    const flat = keys.flatMap(k => groups[k]);
+    const owner = { id: user.id, name: user.name, avatar_path: user.avatar_path };
+    box.querySelectorAll('[data-arc]').forEach(b => b.addEventListener('click', () => {
+      const idx = flat.findIndex(s => String(s.id) === b.dataset.arc);
+      openArchiveViewer(flat, owner, Math.max(0, idx), () => loadArchiveSection(user, isMine));
+    }));
+  } catch (e) {
+    const card = $('#archive-card');
+    if (card) card.style.display = 'none';
   }
 }
 
