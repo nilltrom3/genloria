@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const db = require('../db');
 const { publicUser, issueRecoveryCode, validEmail, cleanPersonFields, PERSON_FIELDS } = require('./auth');
 const { createUpload, UPLOAD_DIR } = require('../upload');
+const emailer = require('../email');
 
 const router = express.Router();
 
@@ -340,6 +341,24 @@ router.get('/admin/invite-codes', requireAuth, requireAdmin, (req, res) => {
 router.delete('/admin/invite-codes/:id', requireAuth, requireAdmin, (req, res) => {
   db.prepare('UPDATE invite_codes SET active = 0 WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// Enviar correo de bienvenida a todos los miembros registrados de mi familia (solo admin)
+router.post('/admin/broadcast-welcome', requireAuth, requireAdmin, async (req, res) => {
+  if (!emailer.configured()) return res.status(400).json({ error: 'El servicio de correo no está configurado.' });
+  const myFam = db.getFamilyId(req.session.userId);
+  const fam = db.prepare('SELECT name FROM families WHERE id = ?').get(myFam);
+  const familyName = fam ? fam.name : 'tu familia';
+  const members = db.prepare("SELECT id, name, email FROM users WHERE family_id = ? AND email IS NOT NULL AND TRIM(email) != ''").all(myFam);
+  let sent = 0, failed = 0;
+  const failures = [];
+  for (const m of members) {
+    const w = emailer.welcomeEmail(m.name, familyName);
+    const r = await emailer.sendEmail({ to: m.email, subject: w.subject, html: w.html });
+    if (r.ok) sent++; else { failed++; failures.push(m.email); }
+    await new Promise(r2 => setTimeout(r2, 400));
+  }
+  res.json({ total: members.length, sent, failed, failures });
 });
 
 module.exports = router;

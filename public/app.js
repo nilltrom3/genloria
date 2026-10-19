@@ -2134,9 +2134,10 @@ async function viewAdmin(tab) {
   app.innerHTML = `
     ${topbar('Administración')}
     <div class="tabs">
-      <button id="tab-users" class="${tab !== 'codes' && tab !== 'tree' && tab !== 'platform' ? 'active' : ''}">👥 Usuarios</button>
+      <button id="tab-users" class="${tab !== 'codes' && tab !== 'tree' && tab !== 'platform' && tab !== 'mail' ? 'active' : ''}">👥 Usuarios</button>
       <button id="tab-codes" class="${tab === 'codes' ? 'active' : ''}">🎟 Códigos</button>
       <button id="tab-tree" class="${tab === 'tree' ? 'active' : ''}">🌳 Árbol</button>
+      <button id="tab-mail" class="${tab === 'mail' ? 'active' : ''}">📧 Correos</button>
       ${me.is_superadmin ? `<button id="tab-platform" class="${tab === 'platform' ? 'active' : ''}">🌐 Plataforma</button>` : ''}
     </div>
     <div class="card" id="admin-body"></div>`;
@@ -2315,16 +2316,43 @@ async function viewAdmin(tab) {
     }));
   }
   function activateTab(name) {
-    ['users', 'codes', 'tree', 'platform'].forEach(t => {
+    ['users', 'codes', 'tree', 'platform', 'mail'].forEach(t => {
       const el = $('#tab-' + t);
       if (el) el.classList.toggle('active', t === name);
+    });
+  }
+  function showMail() {
+    const withMail = users.filter(u => u.email && u.email.trim());
+    body.innerHTML = `
+      <h3 style="margin-top:0">📧 Correo de bienvenida</h3>
+      <p class="sub">Envía el correo de bienvenida (diseño elegante) a cada miembro registrado de tu familia, personalizado con su nombre.</p>
+      <div class="card" style="border-color:var(--accent)">
+        <b>${withMail.length} miembro(s)</b> tienen correo registrado y lo recibirán.
+      </div>
+      <button class="btn" id="btn-broadcast" style="margin-top:12px">✉️ Enviar a todos ahora</button>
+      <div id="broadcast-result" style="margin-top:12px"></div>`;
+    $('#btn-broadcast').addEventListener('click', async () => {
+      if (!withMail.length) { toast('No hay miembros con correo registrado.'); return; }
+      if (!confirm(`¿Enviar el correo de bienvenida a ${withMail.length} miembro(s)?\n\nCada uno lo recibe con su propio nombre.`)) return;
+      const btn = $('#btn-broadcast');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        const r = await api('/api/users/admin/broadcast-welcome', { method: 'POST' });
+        $('#broadcast-result').innerHTML = `<div class="card" style="border-color:#2e7d32">
+          <b>✅ Enviados: ${r.sent} de ${r.total}</b>
+          ${r.failed ? `<br><small style="color:#f87171">Fallaron: ${r.failed} (${esc((r.failures || []).join(', '))})</small>` : ''}</div>`;
+        toast('Correos enviados ✅');
+      } catch (err) { toast(err.message); }
+      btn.disabled = false; btn.textContent = '✉️ Enviar a todos ahora';
     });
   }
   $('#tab-users').addEventListener('click', () => { activateTab('users'); showUsers(); });
   $('#tab-codes').addEventListener('click', () => { activateTab('codes'); showCodes(); });
   $('#tab-tree').addEventListener('click', () => { activateTab('tree'); adminTreeTab(body); });
+  $('#tab-mail').addEventListener('click', () => { activateTab('mail'); showMail(); });
   if (me.is_superadmin) $('#tab-platform').addEventListener('click', () => { activateTab('platform'); showPlatform(); });
   if (tab === 'tree') { activateTab('tree'); adminTreeTab(body); }
+  else if (tab === 'mail') { activateTab('mail'); showMail(); }
   else if (tab === 'codes') { activateTab('codes'); showCodes(); }
   else if (tab === 'platform' && me.is_superadmin) { activateTab('platform'); showPlatform(); }
   else showUsers();
