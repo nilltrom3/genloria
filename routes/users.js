@@ -8,8 +8,44 @@ const db = require('../db');
 const { publicUser, issueRecoveryCode, validEmail, cleanPersonFields, PERSON_FIELDS } = require('./auth');
 const { createUpload, UPLOAD_DIR } = require('../upload');
 const emailer = require('../email');
+const pushlib = require('../push');
 
+// Mis suscripciones push (diagnóstico): tipo de servicio y fecha, sin exponer claves
 const router = express.Router();
+
+router.get('/push-status', requireAuth, (req, res) => {
+  const subs = db.prepare('SELECT id, endpoint, created_at FROM push_subscriptions WHERE user_id = ? ORDER BY created_at DESC').all(req.session.userId);
+  res.json({
+    permission: 'desconocido-desde-servidor',
+    subscriptions: subs.map(s => {
+      let host = '';
+      try { host = new URL(s.endpoint).host; } catch {}
+      const type = /fcm.googleapis.com/.test(s.endpoint) ? 'Android/Chrome (FCM)'
+        : /web.push.apple.com/.test(s.endpoint) ? 'iPhone/iPad (APNs)'
+        : /updates.push.services.mozilla.com/.test(s.endpoint) ? 'Firefox'
+        : host || 'otro';
+      return { id: s.id, type, host, created_at: s.created_at };
+    })
+  });
+});
+
+// Enviarme un push de prueba a cada una de mis suscripciones (diagnóstico, no borra nada)
+router.post('/push-test', requireAuth, async (req, res) => {
+  const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(req.session.userId);
+  const results = [];
+  for (const s of subs) {
+    let host = '';
+    try { host = new URL(s.endpoint).host; } catch {}
+    const type = /fcm.googleapis.com/.test(s.endpoint) ? 'Android/Chrome (FCM)'
+      : /web.push.apple.com/.test(s.endpoint) ? 'iPhone/iPad (APNs)'
+      : host || 'otro';
+    const r = await pushlib.testPushToSubscription(s);
+    results.push({ id: s.id, type, ...r });
+    await new Promise(r2 => setTimeout(r2, 300));
+  }
+  res.json({ total: subs.length, results });
+});
+
 
 // Subida segura de avatares: solo imágenes en lista cerrada (sin .svg), MIME validado.
 const avatarUpload = createUpload({

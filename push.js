@@ -54,3 +54,26 @@ async function sendPushToFamily(familyId, excludeUserId, payload) {
 }
 
 module.exports = { getVapidPublicKey, sendPushToUser, sendPushToFamily };
+
+// Envía un push de prueba a UNA suscripción y reporta el resultado SIN borrarla.
+// Devuelve { ok:true } o { ok:false, status, message }.
+async function testPushToSubscription(sub) {
+  const payload = JSON.stringify({
+    title: '🔔 Prueba GENLORIA',
+    body: 'Si ves esta notificación, todo funciona en este dispositivo.',
+    tag: 'genloria-test',
+    url: '/'
+  });
+  try {
+    await webpush.sendNotification(
+      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      payload,
+      { urgency: 'high', TTL: 60 }
+    );
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, status: e.statusCode || 0, message: String(e.message || e).slice(0, 160) };
+  }
+}
+
+module.exports.testPushToSubscription = testPushToSubscription;

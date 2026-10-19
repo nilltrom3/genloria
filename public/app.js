@@ -1345,6 +1345,32 @@ async function viewProfile(username) {
         }
         updatePushBtn();
       });
+      // Diagnóstico push: ver mis suscripciones y enviarme una prueba
+      const diagBtn = document.createElement('button');
+      diagBtn.textContent = '🧪 Probar notificación';
+      diagBtn.style.marginTop = '8px';
+      pb.after(diagBtn);
+      const diagBox = document.createElement('div');
+      diagBox.id = 'push-diag';
+      diagBtn.after(diagBox);
+      diagBtn.addEventListener('click', async () => {
+        diagBox.innerHTML = '<p class="sub">Probando…</p>';
+        try {
+          const st = await api('/api/users/push-status');
+          const t = await api('/api/users/push-test', { method: 'POST' });
+          if (!t.total) {
+            diagBox.innerHTML = '<div class="card" style="border-color:#f87171"><b>Sin suscripciones.</b><br><small>Activa las notificaciones primero con el botón de arriba.</small></div>';
+            return;
+          }
+          diagBox.innerHTML = t.results.map(r => `
+            <div class="card" style="border-color:${r.ok ? '#2e7d32' : '#f87171'};margin-top:8px">
+              <b>${r.ok ? '✅' : '❌'} ${esc(r.type)}</b><br>
+              <small>${r.ok
+                ? 'El servidor la envió bien. Si no la ves, el bloqueo está en tu teléfono (permiso del sistema, ahorro de batería o Chrome).'
+                : `El servidor NO pudo entregarla (código ${r.status}).<br>${esc(r.message)}`}</small>
+            </div>`).join('');
+        } catch (e) { diagBox.innerHTML = `<p class="sub">Error: ${esc(e.message)}</p>`; }
+      });
     }
     $('#btn-ficha').onclick = () => openPersonSheet(user.id, 'view');
     const lo = $('#app [data-logout]');
