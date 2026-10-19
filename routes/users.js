@@ -376,6 +376,18 @@ router.post('/admin/broadcast-welcome', requireAuth, requireAdmin, async (req, r
   res.json({ total: members.length, sent, failed, failures, scope });
 });
 
+// Enviarme una muestra del correo de bienvenida a mi propio correo (solo admin)
+router.post('/admin/test-welcome', requireAuth, requireAdmin, async (req, res) => {
+  if (!emailer.configured()) return res.status(400).json({ error: 'El servicio de correo no está configurado.' });
+  const me = db.prepare('SELECT name, email, family_id FROM users WHERE id = ?').get(req.session.userId);
+  if (!me.email || !me.email.trim()) return res.status(400).json({ error: 'Tu cuenta no tiene correo registrado.' });
+  const fam = db.prepare('SELECT name FROM families WHERE id = ?').get(me.family_id);
+  const msg = emailer.welcomeEmail(me.name, fam ? fam.name : null);
+  const r = await emailer.sendEmail({ to: me.email.trim(), subject: '[MUESTRA] ' + msg.subject, html: msg.html });
+  if (!r.ok) return res.status(500).json({ error: 'No se pudo enviar la muestra.' });
+  res.json({ ok: true, to: me.email.trim() });
+});
+
 // Conteo de destinatarios para la pestaña Correos
 router.get('/admin/broadcast-counts', requireAuth, requireAdmin, (req, res) => {
   const me = db.prepare('SELECT is_superadmin FROM users WHERE id = ?').get(req.session.userId);

@@ -2339,7 +2339,18 @@ async function viewAdmin(tab) {
         <b>${counts.family} miembro(s)</b> de tu familia tienen correo registrado y lo recibirán.
       </div>`}
       <button class="btn" id="btn-broadcast" style="margin-top:12px">✉️ Enviar a todos ahora</button>
+      <button class="btn" id="btn-sample" style="margin-top:8px;background:#374151">📨 Enviarme una muestra a mi correo</button>
       <div id="broadcast-result" style="margin-top:12px"></div>`;
+    $('#btn-sample').addEventListener('click', async () => {
+      const btn = $('#btn-sample');
+      btn.disabled = true; btn.textContent = 'Enviando muestra…';
+      try {
+        const r = await api('/api/users/admin/test-welcome', { method: 'POST' });
+        $('#broadcast-result').innerHTML = `<div class="card" style="border-color:#2e7d32">
+          <b>📨 Muestra enviada a ${esc(r.to)}</b><br><small>Revisa tu bandeja (y el spam). Cuando la veas bien, envía a todos.</small></div>`;
+      } catch (err) { toast(err.message); }
+      btn.disabled = false; btn.textContent = '📨 Enviarme una muestra a mi correo';
+    });
     $('#btn-broadcast').addEventListener('click', async () => {
       const scope = canPlatform ? $('#mail-scope').value : 'family';
       const n = scope === 'platform' ? counts.platform : counts.family;
