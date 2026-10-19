@@ -3,6 +3,7 @@
 // los envíos se omiten en silencio (la app sigue funcionando sin correos).
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const EMAIL_FROM = process.env.EMAIL_FROM || 'GENLORIA <bienvenido@genloria.com>';
+const REPLY_TO = process.env.EMAIL_REPLY_TO || 'info@genloria.com';
 
 function configured() {
   return !!RESEND_API_KEY;
@@ -20,7 +21,7 @@ async function sendEmail({ to, subject, html }) {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html })
+      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, reply_to: REPLY_TO })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
