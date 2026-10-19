@@ -1368,7 +1368,16 @@ async function viewProfile(username) {
               <small>${r.ok
                 ? 'El servidor la envió bien. Si no la ves, el bloqueo está en tu teléfono (permiso del sistema, ahorro de batería o Chrome).'
                 : `El servidor NO pudo entregarla (código ${r.status}).<br>${esc(r.message)}`}</small>
+              ${r.ok ? '' : `<br><button class="mini-btn" data-delsub="${r.id}" style="margin-top:8px;color:#f87171">🗑️ Eliminar esta suscripción muerta</button>`}
             </div>`).join('');
+          diagBox.querySelectorAll('[data-delsub]').forEach(b => b.addEventListener('click', async () => {
+            if (!confirm('¿Eliminar esta suscripción? Si ese dispositivo sigue en uso, se vuelve a crear sola al abrir la app.')) return;
+            try {
+              await api(`/api/users/push-subscriptions/${b.dataset.delsub}`, { method: 'DELETE' });
+              toast('Suscripción eliminada ✅');
+              diagBtn.click();
+            } catch (e) { toast(e.message); }
+          }));
         } catch (e) { diagBox.innerHTML = `<p class="sub">Error: ${esc(e.message)}</p>`; }
       });
     }

@@ -29,6 +29,13 @@ router.get('/push-status', requireAuth, (req, res) => {
   });
 });
 
+// Eliminar una de mis suscripciones push (diagnóstico)
+router.delete('/push-subscriptions/:id', requireAuth, (req, res) => {
+  const r = db.prepare('DELETE FROM push_subscriptions WHERE id = ? AND user_id = ?').run(req.params.id, req.session.userId);
+  if (!r.changes) return res.status(404).json({ error: 'No encontrada.' });
+  res.json({ ok: true });
+});
+
 // Enviarme un push de prueba a cada una de mis suscripciones (diagnóstico, no borra nada)
 router.post('/push-test', requireAuth, async (req, res) => {
   const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(req.session.userId);
