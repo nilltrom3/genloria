@@ -4,7 +4,7 @@
 <script>
 // Forzador de actualización: si la versión del servidor es mayor, limpia caché y recarga
 (function() {
-  var CV = 65;
+  var CV = 66;
   try {
     var sv = parseInt(localStorage.getItem('genloria_v') || '0', 10);
     fetch('/api/version', { cache: 'no-store' }).then(function(r) { return r.json(); }).then(function(d) {
