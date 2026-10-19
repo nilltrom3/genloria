@@ -1374,6 +1374,8 @@ function viewSettings() {
         <input type="date" name="birthdate" value="${esc(me.birthdate || '')}">
         <label>Teléfono</label>
         <input type="tel" name="phone" value="${esc(me.phone || '')}" maxlength="30" placeholder="Opcional">
+        <label>Correo electrónico</label>
+        <input type="email" name="email" value="${esc(me.email || '')}" maxlength="120" placeholder="Para entrar y recibir correos de GENLORIA">
         <button class="btn" type="submit">Guardar cambios</button>
       </form>
     </div>
