@@ -364,25 +364,30 @@ router.get('/platform/users', requireAuth, requireSuperAdmin, (req, res) => {
 });
 router.post('/admin/invite-codes', requireAuth, requireAdmin, (req, res) => {
   const { code, maxUses } = req.body || {};
+  const myFam = db.getFamilyId(req.session.userId);
   const finalCode = (code || '').toString().trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32)
     || ('FAM-' + crypto.randomBytes(4).toString('hex').toUpperCase());
   try {
-    const info = db.prepare('INSERT INTO invite_codes (code, created_by, max_uses) VALUES (?,?,?)')
-      .run(finalCode, req.session.userId, Math.max(0, parseInt(maxUses || '0', 10)));
+    const info = db.prepare('INSERT INTO invite_codes (code, created_by, max_uses, family_id) VALUES (?,?,?,?)')
+      .run(finalCode, req.session.userId, Math.max(0, parseInt(maxUses || '0', 10)), myFam);
     res.status(201).json({ inviteCode: db.prepare('SELECT * FROM invite_codes WHERE id = ?').get(info.lastInsertRowid) });
   } catch (e) {
     res.status(409).json({ error: 'Ese código ya existe.' });
   }
 });
 
-// Lista de códigos
+// Lista de códigos (solo de mi familia)
 router.get('/admin/invite-codes', requireAuth, requireAdmin, (req, res) => {
-  res.json({ codes: db.prepare('SELECT * FROM invite_codes ORDER BY created_at DESC').all() });
+  const myFam = db.getFamilyId(req.session.userId);
+  res.json({ codes: db.prepare('SELECT * FROM invite_codes WHERE family_id = ? ORDER BY created_at DESC').all(myFam) });
 });
 
-// Desactivar código
+// Desactivar código (solo de mi familia)
 router.delete('/admin/invite-codes/:id', requireAuth, requireAdmin, (req, res) => {
-  db.prepare('UPDATE invite_codes SET active = 0 WHERE id = ?').run(req.params.id);
+  const myFam = db.getFamilyId(req.session.userId);
+  const code = db.prepare('SELECT id FROM invite_codes WHERE id = ? AND family_id = ?').get(req.params.id, myFam);
+  if (!code) return res.status(404).json({ error: 'Código no encontrado.' });
+  db.prepare('UPDATE invite_codes SET active = 0 WHERE id = ?').run(code.id);
   res.json({ ok: true });
 });
 
