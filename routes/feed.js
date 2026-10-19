@@ -16,7 +16,7 @@ const upload = createUpload({
   prefix: 'post',
   maxBytes: MAX_VIDEO_MB * 1024 * 1024, // el límite fino se valida por tipo
   allowPhoto: true,
-  allowVideo: true
+  allowVideo: false
 });
 
 function requireAuth(req, res, next) {

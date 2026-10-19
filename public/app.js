@@ -1016,7 +1016,7 @@ function viewNew() {
           <button type="button" class="mini-btn" id="btn-cam">📷 Tomar foto</button>
           <button type="button" class="mini-btn" id="btn-gal">🖼️ Elegir de galería</button>
         </div>
-        <input type="file" id="media-input" name="media" accept="image/*,video/*" class="hidden">
+        <input type="file" id="media-input" name="media" accept="image/*" class="hidden">
         <div class="preview hidden" id="preview"></div>
         <div class="error hidden" id="err"></div>
         <button class="btn" type="submit">Publicar 💛</button>
@@ -1046,7 +1046,7 @@ function viewNew() {
     e.preventDefault();
     const fd = new FormData(e.target);
     if (!fd.get('text').toString().trim() && !input.files[0]) {
-      const el = $('#err'); el.textContent = 'Escribe algo o adjunta una foto/video.'; el.classList.remove('hidden');
+      const el = $('#err'); el.textContent = 'Escribe algo o adjunta una foto.'; el.classList.remove('hidden');
       return;
     }
     try {

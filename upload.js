@@ -40,7 +40,8 @@ function createUpload({ prefix = 'file', maxBytes, allowPhoto = true, allowVideo
       const photoOk = allowPhoto && PHOTO_EXTS.includes(ext) && mime.startsWith('image/') && mime !== 'image/svg+xml';
       const videoOk = allowVideo && VIDEO_EXTS.includes(ext) && mime.startsWith('video/');
       if (photoOk || videoOk) return cb(null, true);
-      cb(new Error('Tipo de archivo no permitido. Solo fotos y videos.'));
+      const que = allowPhoto && allowVideo ? 'Solo fotos y videos.' : allowPhoto ? 'Solo fotos.' : 'Solo videos.';
+      cb(new Error('Tipo de archivo no permitido. ' + que));
     }
   });
 }

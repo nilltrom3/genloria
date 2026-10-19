@@ -13,7 +13,7 @@ const upload = createUpload({
   prefix: 'chat',
   maxBytes: 50 * 1024 * 1024,
   allowPhoto: true,
-  allowVideo: true
+  allowVideo: false
 });
 
 function requireAuth(req, res, next) {
