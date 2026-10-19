@@ -1364,6 +1364,12 @@ async function viewProfile(username) {
       </div>
       ${fichaHTML}
       ${exportHTML}
+      <div class="menu-list">
+        ${isMine ? `<button data-go="#/settings">✏️ Editar mi perfil</button>` : ''}
+        ${me && me.role === 'admin' ? `<button data-go="#/admin">🛠 Administración</button>` : ''}
+        ${isMine ? `<button id="btn-push">🔔 Activar notificaciones</button>` : ''}
+        ${isMine ? `<button data-logout style="color:var(--danger)">🚪 Cerrar sesión</button>` : ''}
+      </div>
       ${!user.is_placeholder ? `<div class="card" id="archive-card">
         <h3 style="margin-top:0">📸 Archivo de historias</h3>
         ${isMine ? `<label style="font-size:.9rem">👁 Quién puede ver mi archivo:
@@ -1372,13 +1378,7 @@ async function viewProfile(username) {
             <option value="private">Solo yo</option>
           </select></label>` : ''}
         <div id="archive-grid" style="margin-top:10px"><p class="sub">Cargando…</p></div>
-      </div>` : ''}
-      <div class="menu-list">
-        ${isMine ? `<button data-go="#/settings">✏️ Editar mi perfil</button>` : ''}
-        ${me && me.role === 'admin' ? `<button data-go="#/admin">🛠 Administración</button>` : ''}
-        ${isMine ? `<button id="btn-push">🔔 Activar notificaciones</button>` : ''}
-        ${isMine ? `<button data-logout style="color:var(--danger)">🚪 Cerrar sesión</button>` : ''}
-      </div>`;
+      </div>` : ''}`;
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
     const pb = $('#btn-push');
     if (pb) {
