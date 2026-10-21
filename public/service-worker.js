@@ -1,7 +1,7 @@
 // service-worker.js — PWA: app shell con red primero (actualizaciones inmediatas), imágenes en caché.
-const CACHE = 'genloria-v67';
+const CACHE = 'genloria-v68';
 const SHELL = [
-  '/', '/index.html', '/styles.css', '/app.js', '/tree.js', '/manifest.json',
+  '/', '/index.html', '/styles.css', '/app.js', '/tree.js', '/i18n.js', '/manifest.json',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/avatar-default.svg',
   '/images/login-hero.jpg'
 ];

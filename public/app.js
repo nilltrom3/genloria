@@ -37,25 +37,22 @@ function fmtDate(iso) {
 function fmtDateTime(iso) {
   const d = new Date((iso || '').replace(' ', 'T') + 'Z');
   if (isNaN(d.getTime())) return iso || '';
-  const fecha = d.toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
-  let h = d.getHours();
-  const m = String(d.getMinutes()).padStart(2, '0');
-  const ap = h >= 12 ? 'p. m.' : 'a. m.';
-  h = h % 12 || 12;
-  return `${fecha} · ${h}:${m} ${ap}`;
+  const fecha = d.toLocaleDateString(appLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
+  const hora = d.toLocaleTimeString(appLocale(), { hour: 'numeric', minute: '2-digit' });
+  return `${fecha} · ${hora}`;
 }
 
 function timeAgo(iso) {
   const d = new Date(iso.replace(' ', 'T') + 'Z');
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (s < 60) return 'ahora mismo';
+  if (s < 60) return T('justNow');
   const m = Math.floor(s / 60);
-  if (m < 60) return `hace ${m} min`;
+  if (m < 60) return T('minAgo', { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `hace ${h} h`;
+  if (h < 24) return T('hourAgo', { n: h });
   const days = Math.floor(h / 24);
-  if (days < 7) return `hace ${days} d`;
-  return d.toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  if (days < 7) return T('dayAgo', { n: days });
+  return d.toLocaleDateString(appLocale(), { day: 'numeric', month: 'short' });
 }
 
 function toast(msg) {
@@ -73,7 +70,7 @@ async function api(path, opts = {}) {
     ...opts
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Error de red');
+  if (!res.ok) throw new Error(data.error || T('netError'));
   return data;
 }
 
@@ -97,20 +94,20 @@ function bufToBase64(buf) {
 async function requestPushPermission(silent) {
   try {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-      if (!silent) toast('Tu dispositivo no soporta notificaciones');
+      if (!silent) toast(T('pushUnsupported'));
       return false;
     }
     let perm = Notification.permission;
     if (perm === 'default') perm = await Notification.requestPermission();
     if (perm !== 'granted') {
-      if (!silent) toast('Activa el permiso de notificaciones para recibir avisos');
+      if (!silent) toast(T('pushNeedPerm'));
       return false;
     }
     const reg = await navigator.serviceWorker.ready;
     // Clave pública actual del servidor
     const kd = await api('/api/auth/push-key').catch(() => ({}));
     if (!kd.publicKey) {
-      if (!silent) toast('Notificaciones no disponibles por ahora');
+      if (!silent) toast(T('pushUnavailable'));
       return false;
     }
     // Si la clave del servidor cambió desde la última suscripción, re-suscribir
@@ -138,11 +135,11 @@ async function requestPushPermission(silent) {
       })
     });
     localStorage.setItem('genloria_vapid_key', kd.publicKey);
-    if (!silent) toast('Notificaciones activadas 🔔');
+    if (!silent) toast(T('pushOn'));
     return true;
   } catch (e) {
     console.warn('[push]', e);
-    if (!silent) toast('No se pudieron activar las notificaciones');
+    if (!silent) toast(T('pushFail'));
     return false;
   }
 }
@@ -168,7 +165,7 @@ async function ensurePushSubscription() {
 async function apiForm(path, formData, method = 'POST') {
   const res = await fetch(path, { method, credentials: 'same-origin', body: formData });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Error de red');
+  if (!res.ok) throw new Error(data.error || T('netError'));
   return data;
 }
 
@@ -181,7 +178,7 @@ function compressImageFile(file, maxDim = 1280, quality = 0.82) {
     // procesar ni mostrar. Avisar con un mensaje claro en vez de fallar.
     const isHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name || '');
     if (isHeic) {
-      return reject(new Error('Esta foto está en formato HEIC (iPhone). Abre Ajustes → Cámara → Formatos → "Más compatible", o elige otra foto.'));
+      return reject(new Error(T('heicError')));
     }
     // GIFs animados y archivos pequeños se suben tal cual
     if (file.type === 'image/gif' || file.size < 900 * 1024) return resolve(file);
@@ -229,7 +226,7 @@ function checkVideoDuration(fd) {
         vid.preload = 'metadata';
         vid.onloadedmetadata = () => {
           URL.revokeObjectURL(url);
-          if (vid.duration > 60) reject(new Error('El video no puede durar más de 60 segundos.'));
+          if (vid.duration > 60) reject(new Error(T('videoTooLong')));
           else resolve();
         };
         vid.onerror = () => { URL.revokeObjectURL(url); resolve(); };
@@ -288,78 +285,47 @@ bottomnav.addEventListener('click', e => {
   if (b) location.hash = b.dataset.nav;
 });
 
-// ---------- Idioma (login) ----------
-let appLang = localStorage.getItem('genloria-lang') || 'es';
-const STR = {
-  es: {
-    hello: '¡Hola!', loginSub: 'Inicia sesión para continuar tu historia.',
-    emailUser: 'Correo electrónico o usuario', password: 'Contraseña',
-    login: 'Entrar', remember: 'Mantener sesión iniciada', forgot: '¿Olvidaste tu clave?',
-    firstTime: '¿PRIMERA VEZ?', createAccount: 'Crea tu cuenta', joinTree: 'Únete y comienza tu árbol familiar.',
-    slogan1: 'Generaciones unidas.', slogan2: 'Historias que perduran.',
-    heroDesc: 'Conecta, preserva y celebra la historia de tu familia en un solo lugar.',
-    badge1: 'Privado y seguro', badge2: 'Tu familia en un solo lugar', badge3: 'Historias que perduran',
-    needCreds: 'Escribe tu correo o usuario y tu contraseña.', loginError: 'Correo o contraseña incorrectos.',
-    registerTitle: 'Crear cuenta', registerSub: 'Únete a tu familia con el código familiar.',
-    fullName: 'Nombre completo', email: 'Correo electrónico', inviteCode: 'Código familiar',
-    createBtn: 'Crear mi cuenta', hasAccount: '¿Ya tienes cuenta? Entra',
-    recoverTitle: 'Recuperar acceso', recoverSub: 'Pide tu código al administrador de tu familia.',
-    codeLabel: 'Código de recuperación', newPass: 'Nueva contraseña (mín. 8)',
-    recoverBtn: 'Cambiar mi contraseña', backToLogin: '← Volver a entrar',
-    newToGenloria: '¿Nuevo en GENLORIA?', conoceBtn: 'Conoce GENLORIA',
-    conoceSub: 'Descubre todo lo que puedes hacer.', appVersion: 'GENLORIA v1.0',
-    menuConoce: '🌳 Conoce GENLORIA', menuRegister: '👤 Crea tu cuenta', menuLogin: '🔑 Iniciar sesión',
-    whoAreYou: '¿Eres una de estas personas?', whoAreYouSub: 'Si tu nombre ya está en el árbol familiar, selecciónalo para vincular tu cuenta.',
-    iAmThis: 'Soy esta persona', notInList: 'No estoy en la lista →', skipForNow: 'Omitir por ahora',
-    connectFamily: 'Conecta tu familia', connectFamilySub: 'Elige a tus familiares o agrega sus nombres para invitarlos después.',
-    father: 'Padre', mother: 'Madre', spouse: 'Esposa/o', children: 'Hijos',
-    noneOption: '— Ninguno —', addNewName: '＋ Agregar nombre nuevo…', newNamePh: 'Nombre del familiar',
-    addChild: '＋ Agregar otro hijo', finishBtn: 'Terminar', welcomeClaimed: '¡Cuenta vinculada! 🎉'
-  },
-  en: {
-    hello: 'Hello!', loginSub: 'Log in to continue your story.',
-    emailUser: 'Email or username', password: 'Password',
-    login: 'Log in', remember: 'Keep me logged in', forgot: 'Forgot your password?',
-    firstTime: 'FIRST TIME?', createAccount: 'Create your account', joinTree: 'Join and start your family tree.',
-    slogan1: 'United generations.', slogan2: 'Stories that endure.',
-    heroDesc: 'Connect, preserve and celebrate your family history in one place.',
-    badge1: 'Private and secure', badge2: 'Your family in one place', badge3: 'Stories that endure',
-    needCreds: 'Enter your email or username and password.', loginError: 'Incorrect email or password.',
-    registerTitle: 'Create account', registerSub: 'Join your family with the family code.',
-    fullName: 'Full name', email: 'Email', inviteCode: 'Family code',
-    createBtn: 'Create my account', hasAccount: 'Already have an account? Log in',
-    recoverTitle: 'Recover access', recoverSub: 'Ask your family administrator for your code.',
-    codeLabel: 'Recovery code', newPass: 'New password (min. 8)',
-    recoverBtn: 'Change my password', backToLogin: '← Back to login',
-    newToGenloria: 'New to GENLORIA?', conoceBtn: 'Meet GENLORIA',
-    conoceSub: 'Discover everything you can do.', appVersion: 'GENLORIA v1.0',
-    menuConoce: '🌳 Meet GENLORIA', menuRegister: '👤 Create your account', menuLogin: '🔑 Log in',
-    whoAreYou: 'Are you one of these people?', whoAreYouSub: 'If your name is already in the family tree, select it to link your account.',
-    iAmThis: 'This is me', notInList: 'I am not on the list →', skipForNow: 'Skip for now',
-    connectFamily: 'Connect your family', connectFamilySub: 'Choose your relatives or add their names to invite them later.',
-    father: 'Father', mother: 'Mother', spouse: 'Spouse', children: 'Children',
-    noneOption: '— None —', addNewName: '＋ Add a new name…', newNamePh: "Relative's name",
-    addChild: '＋ Add another child', finishBtn: 'Finish', welcomeClaimed: 'Account linked! 🎉'
-  }
-};
-const T = k => (STR[appLang] && STR[appLang][k]) || STR.es[k] || k;
+// ---------- Idioma ----------
+// El diccionario (STR), la detección y T() viven en i18n.js (5 idiomas).
+// Aquí solo quedan los controles visuales del selector de idioma.
+function langButtonHTML() {
+  return `<button class="login-lang" id="lang-btn">🌐 ${currentLangName()} ▾</button>`;
+}
+function openLangSheet() {
+  openSheet(`
+    <h3 style="margin-top:0">🌐 ${T('language')}</h3>
+    <div class="menu-list" style="margin:0 0 12px">
+      ${LANGS.map(l => `<button data-langpick="${l.code}">${l.name}${l.code === appLang ? ' ✓' : ''}</button>`).join('')}
+    </div>
+    <button class="btn secondary" id="lang-cancel">${T('cancel')}</button>`);
+  $$('#sheet [data-langpick]').forEach(b => b.onclick = () => {
+    const code = b.dataset.langpick;
+    closeSheet();
+    if (code !== appLang) setAppLang(code);
+  });
+  $('#lang-cancel').onclick = closeSheet;
+}
+function wireLangButton() {
+  const b = $('#lang-btn');
+  if (b) b.onclick = openLangSheet;
+}
 
 // ---------- Vistas ----------
 function topbar(title, rightBtn) {
-  const infoBtn = `<button class="topbar-info" data-go="#/about" aria-label="Qué es GENLORIA" title="Qué es GENLORIA">ⓘ</button>`;
+  const infoBtn = `<button class="topbar-info" data-go="#/about" aria-label="${T('aboutTitle')}" title="${T('aboutTitle')}">ⓘ</button>`;
   return `<div class="topbar"><div class="logo"><img src="/icons/icon-192.png" alt="GENLORIA"> GENLORIA</div><div style="display:flex;gap:8px;align-items:center">${infoBtn}${rightBtn || ''}</div></div>`;
 }
 
 function viewLogin() {
   setNav(null);
-  document.title = 'GENLORIA — Generaciones unidas. Historias que perduran.';
+  document.title = T('pageTitle');
   app.innerHTML = `
   <div class="login-page">
     <header class="login-header">
       <div class="login-brand"><img src="/logo-genloria.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
-        <button class="login-menu-btn" id="menu-btn" aria-label="Menú">☰</button>
+        ${langButtonHTML()}
+        <button class="login-menu-btn" id="menu-btn" aria-label="${T('menuBtn')}">☰</button>
       </div>
       <div class="login-menu hidden" id="login-menu">
         <button data-go="#/conoce">${T('menuConoce')}</button>
@@ -386,7 +352,7 @@ function viewLogin() {
         <div class="login-field">
           <span class="fi">🔒</span>
           <input type="password" name="password" id="login-pass" autocomplete="current-password" required placeholder="${T('password')}">
-          <button type="button" class="toggle-pass" id="toggle-pass" aria-label="Mostrar">👁</button>
+          <button type="button" class="toggle-pass" id="toggle-pass" aria-label="${T('showPass')}">👁</button>
         </div>
         <div class="login-error" id="err"></div>
         <button class="btn-login" type="submit">${T('login')} →</button>
@@ -407,7 +373,7 @@ function viewLogin() {
       </button>
       <button class="btn-conoce" id="btn-install-guide" style="margin-top:8px">
         <span class="rc-icon">📲</span>
-        <span><b>Instalar como app</b><p>Agrega GENLORIA a tu pantalla de inicio</p></span>
+        <span><b>${T('installApp')}</b><p>${T('installAppDesc')}</p></span>
         <span class="rc-go">›</span>
       </button>
     </div>
@@ -420,28 +386,14 @@ function viewLogin() {
     </div>
     <p class="login-version">${T('appVersion')}</p>
   </div>`;
-  $('#lang-btn').onclick = () => {
-    appLang = appLang === 'es' ? 'en' : 'es';
-    localStorage.setItem('genloria-lang', appLang);
-    viewLogin();
-  };
+  wireLangButton();
   $('#btn-install-guide').onclick = () => openSheet(`<div class="sheet-body">
-    <h3 style="margin-top:0">📲 Instalar GENLORIA como app</h3>
-    <h4>🍎 En iPhone (Safari)</h4>
-    <ol style="padding-left:20px;line-height:1.8">
-      <li>Abre <b>genloria.com</b> en Safari</li>
-      <li>Toca el botón <b>Compartir</b> (cuadrado con flecha ↑)</li>
-      <li>Elige <b>"Agregar a pantalla de inicio"</b></li>
-      <li>Toca <b>Agregar</b>. ¡Listo! Tendrás el ícono de GENLORIA</li>
-    </ol>
-    <h4>🤖 En Android (Chrome)</h4>
-    <ol style="padding-left:20px;line-height:1.8">
-      <li>Abre <b>genloria.com</b> en Chrome</li>
-      <li>Toca el menú <b>⋮</b> (tres puntos)</li>
-      <li>Elige <b>"Agregar a pantalla principal"</b> o <b>"Instalar app"</b></li>
-      <li>Confirma. ¡Listo!</li>
-    </ol>
-    <p class="sub">La app se abre a pantalla completa y se actualiza sola.</p>
+    <h3 style="margin-top:0">${T('installTitle')}</h3>
+    <h4>${T('installIosTitle')}</h4>
+    <ol style="padding-left:20px;line-height:1.8">${T('installIosSteps')}</ol>
+    <h4>${T('installAndroidTitle')}</h4>
+    <ol style="padding-left:20px;line-height:1.8">${T('installAndroidSteps')}</ol>
+    <p class="sub">${T('installNote')}</p>
   </div>`);
   const menuBtn = $('#menu-btn'), menu = $('#login-menu');
   menuBtn.onclick = e => { e.stopPropagation(); menu.classList.toggle('hidden'); };
@@ -483,7 +435,7 @@ function viewRecover() {
   <div class="login-page">
     <header class="login-header">
       <div class="login-brand"><img src="/icons/icon-192.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
-      <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
+      ${langButtonHTML()}
     </header>
     <div class="login-card" style="margin-top:24px">
       <h2>🔑 ${T('recoverTitle')}</h2>
@@ -503,11 +455,7 @@ function viewRecover() {
       <p class="link" style="text-align:center;margin-top:14px"><a href="#/login">${T('backToLogin')}</a></p>
     </div>
   </div>`;
-  $('#lang-btn').onclick = () => {
-    appLang = appLang === 'es' ? 'en' : 'es';
-    localStorage.setItem('genloria-lang', appLang);
-    viewRecover();
-  };
+  wireLangButton();
   $('#f-recover').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -516,7 +464,7 @@ function viewRecover() {
         method: 'POST',
         body: JSON.stringify({ code: fd.get('code'), newPassword: fd.get('newPassword') })
       });
-      toast('¡Clave actualizada! Ahora entra con tu correo 🎉');
+      toast(T('passUpdated'));
       location.hash = '#/login';
     } catch (err) {
       $('#err').textContent = err.message;
@@ -530,14 +478,14 @@ function viewRegister() {
   <div class="login-page">
     <header class="login-header">
       <div class="login-brand"><img src="/icons/icon-192.png" alt="GENLORIA"><div>GENLORIA<small>by Nilltrom</small></div></div>
-      <button class="login-lang" id="lang-btn">🌐 ${appLang === 'es' ? 'Español' : 'English'} ▾</button>
+      ${langButtonHTML()}
     </header>
     <div class="login-card" style="margin-top:24px">
       <h2>👥 ${T('registerTitle')}</h2>
       <p class="sub">${T('registerSub')}</p>
       <div style="display:flex;gap:8px;margin-bottom:16px">
-        <button type="button" id="mode-create" class="btn" style="flex:1">🌳 Crear mi familia</button>
-        <button type="button" id="mode-join" class="btn-ghost" style="flex:1;border:1px solid var(--border)">🎫 Unirme con código</button>
+        <button type="button" id="mode-create" class="btn" style="flex:1">${T('modeCreate')}</button>
+        <button type="button" id="mode-join" class="btn-ghost" style="flex:1;border:1px solid var(--border)">${T('modeJoin')}</button>
       </div>
       <form id="f-reg">
         <div class="login-field">
@@ -550,11 +498,11 @@ function viewRegister() {
         </div>
         <div class="login-field">
           <span class="fi">🔒</span>
-          <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="${T('password')} (mín. 8)">
+          <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="${T('newPass')}">
         </div>
         <div class="login-field" id="field-familyname">
           <span class="fi">🌳</span>
-          <input type="text" name="familyName" maxlength="80" placeholder="Nombre de tu familia (ej: Familia De La Cruz)">
+          <input type="text" name="familyName" maxlength="80" placeholder="${T('familyNamePh')}">
         </div>
         <div class="login-field hidden" id="field-invitecode">
           <span class="fi">🎫</span>
@@ -584,11 +532,7 @@ function viewRegister() {
   btnC.onclick = () => setMode('create');
   btnJ.onclick = () => setMode('join');
   setMode('create');
-  $('#lang-btn').onclick = () => {
-    appLang = appLang === 'es' ? 'en' : 'es';
-    localStorage.setItem('genloria-lang', appLang);
-    viewRegister();
-  };
+  wireLangButton();
   $('#f-reg').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -604,9 +548,9 @@ function viewRegister() {
       });
       me = user;
       if (regMode === 'create' && family) {
-        toast(`¡Familia "${family.name}" creada! 🎉 Tu código: ${family.invite_code}`);
+        toast(T('familyCreated', { name: family.name, code: family.invite_code }));
       } else {
-        toast('¡Bienvenido a la familia! 🎉');
+        toast(T('welcomeFamily'));
       }
       // Notificaciones activadas por defecto: pedir permiso al registrarse
       try { await requestPushPermission(); } catch {}
@@ -628,7 +572,7 @@ async function viewClaimIdentity() {
     <div class="login-card" style="margin-top:24px">
       <h2>👤 ${T('whoAreYou')}</h2>
       <p class="sub">${T('whoAreYouSub')}</p>
-      <div id="ph-list"><div class="loading">Cargando…</div></div>
+      <div id="ph-list"><div class="loading">${T('loading')}</div></div>
       <div class="login-error" id="err"></div>
       <button class="btn-login" id="btn-notme" style="margin-top:14px;background:var(--card);color:var(--text);border:1.5px solid var(--border)">${T('notInList')}</button>
       <p class="link" style="text-align:center;margin-top:12px"><a href="#/feed">${T('skipForNow')}</a></p>
@@ -662,7 +606,7 @@ async function viewConnectFamily() {
   let users = [];
   try { users = (await api('/api/tree')).users.filter(u => u.id !== me.id); } catch {}
   const opts = sel => `<option value="">${T('noneOption')}</option>` +
-    users.map(u => `<option value="${u.id}">${esc(u.name)}${u.is_placeholder ? ' (árbol)' : ''}</option>`).join('') +
+    users.map(u => `<option value="${u.id}">${esc(u.name)}${u.is_placeholder ? ' ' + T('treeTag') : ''}</option>`).join('') +
     `<option value="__new">${T('addNewName')}</option>`;
   const relRow = (label, key) => `
     <div style="margin-bottom:12px">
@@ -741,7 +685,7 @@ async function viewConnectFamily() {
         method: 'POST', body: JSON.stringify({ fatherId, motherId, spouseId, childrenIds })
       });
       if (r.warnings && r.warnings.length) toast(r.warnings.join('; '));
-      else toast('¡Familia conectada! 🎉');
+      else toast(T('familyConnected'));
       location.hash = '#/feed';
     } catch (err) { $('#err').textContent = err.message; }
     btn.disabled = false;
@@ -750,7 +694,7 @@ async function viewConnectFamily() {
 
 async function viewFeed() {
   setNav('feed');
-  app.innerHTML = `${topbar('GENLORIA')}<div class="loading">Cargando…</div>`;
+  app.innerHTML = `${topbar('GENLORIA')}<div class="loading">${T('loading')}</div>`;
   try {
     const [feed, stories] = await Promise.all([
       api('/api/posts?limit=30'),
@@ -759,7 +703,7 @@ async function viewFeed() {
     feedCache = feed.posts;
     storyGroups = stories.groups;
   } catch (e) {
-    app.innerHTML = `${topbar('GENLORIA')}<div class="empty">No se pudo cargar. Revisa tu conexión.</div>`;
+    app.innerHTML = `${topbar('GENLORIA')}<div class="empty">${T('feedLoadError')}</div>`;
     return;
   }
   renderFeed();
@@ -779,13 +723,13 @@ function storyBarHTML() {
   if (mine) {
     html += `<button class="story-simple" data-viewmine="1">
       <span class="ss-ring">${thumb(mine.stories[0], mine.user)}</span>
-      <div class="sname">Tú</div>
+      <div class="sname">${T('youLabel')}</div>
       <span class="ss-add" id="add-more-story">＋</span>
     </button>`;
   } else {
     html += `<button class="story-simple" id="add-story">
       <span class="ss-ring add"><span class="ss-plus">＋</span></span>
-      <div class="sname">Tu historia</div>
+      <div class="sname">${T('yourStory')}</div>
     </button>`;
   }
   for (const g of storyGroups.filter(g => g.user.id !== me.id)) {
@@ -804,7 +748,7 @@ function postCardHTML(p) {
     <div class="post-head">
       ${avatarHTML(p.author)}
       <div class="who">${coloredName(p.author)}<small>${timeAgo(p.created_at)} · ${fmtDateTime(p.created_at)}</small></div>
-      ${canDelete ? `<button class="del" data-postmenu="${p.id}" aria-label="Opciones">⋯</button>` : ''}
+      ${canDelete ? `<button class="del" data-postmenu="${p.id}" aria-label="${T('postOptions')}">⋯</button>` : ''}
     </div>
     ${p.text ? `<div class="post-text">${esc(p.text)}</div>` : ''}
     ${mediaHTML(p)}
@@ -820,7 +764,7 @@ function renderFeed() {
   app.innerHTML = `${topbar('GENLORIA')}
     ${storyBarHTML()}
     <div id="feed-list">
-      ${feedCache.length ? feedCache.map(postCardHTML).join('') : '<div class="empty">Aún no hay publicaciones.<br>Sé el primero en compartir algo con la familia 💛</div>'}
+      ${feedCache.length ? feedCache.map(postCardHTML).join('') : `<div class="empty">${T('feedEmpty')}</div>`}
     </div>`;
 
   const openFilePicker = (useCamera) => {
@@ -835,12 +779,12 @@ function renderFeed() {
       const fd = new FormData();
       files.forEach(f => fd.append('media', f));
       try {
-        toast(files.length > 1 ? `Subiendo ${files.length} fotos…` : 'Subiendo historia…');
+        toast(files.length > 1 ? T('uploadingPhotos', { n: files.length }) : T('uploadingStory'));
         await compressFormImages(fd, 1280, 0.82);
         await apiForm('/api/stories', fd);
-        toast('¡Historia publicada! ✨');
+        toast(T('storyPublished'));
         viewFeed();
-      } catch (e) { toast('Error: ' + e.message); }
+      } catch (e) { toast(T('errorPrefix', { msg: e.message })); }
     };
     input.click();
   };
@@ -849,9 +793,9 @@ function renderFeed() {
     const sheet = document.createElement('div');
     sheet.className = 'action-sheet-backdrop';
     sheet.innerHTML = `<div class="action-sheet">
-      <button data-src="camera">📷 Tirar foto</button>
-      <button data-src="gallery">🖼️ Elegir de galería</button>
-      <button data-src="cancel" class="cancel">Cancelar</button>
+      <button data-src="camera">${T('takePhoto')}</button>
+      <button data-src="gallery">${T('fromGallery')}</button>
+      <button data-src="cancel" class="cancel">${T('cancel')}</button>
     </div>`;
     document.body.appendChild(sheet);
     sheet.addEventListener('click', e => {
@@ -898,7 +842,7 @@ function renderFeed() {
             <div>${coloredName(c.author)} ${esc(c.text)}<br><small style="color:var(--muted)">${timeAgo(c.created_at)}</small></div>
           </div>`).join('') + `
           <form class="comment-form" data-cform="${id}">
-            <input type="text" name="text" placeholder="Escribe un comentario…" maxlength="500" required>
+            <input type="text" name="text" placeholder="${T('commentPh')}" maxlength="500" required>
             <button type="submit">➤</button>
           </form>`;
         box.classList.remove('hidden');
@@ -912,7 +856,7 @@ function renderFeed() {
             if (p) p.commentCount++;
             cBtn.innerHTML = `💬 ${p ? p.commentCount : ''}`;
             box.classList.add('hidden');
-            toast('Comentario publicado 💬');
+            toast(T('commentPublished'));
           } catch (err) { toast(err.message); }
         });
       } catch (err) { toast(err.message); }
@@ -924,14 +868,14 @@ function renderFeed() {
       const post = feedCache.find(x => x.id == pid);
       openSheet(`
         <div class="menu-list" style="margin:0">
-          <button id="pm-edit">✏️ Editar publicación</button>
-          <button id="pm-del" style="color:var(--danger)">🗑 Eliminar publicación</button>
-          <button id="pm-cancel">Cancelar</button>
+          <button id="pm-edit">${T('editPost')}</button>
+          <button id="pm-del" style="color:var(--danger)">${T('deletePost')}</button>
+          <button id="pm-cancel">${T('cancel')}</button>
         </div>`);
       $('#pm-cancel').onclick = closeSheet;
       $('#pm-del').onclick = async () => {
         closeSheet();
-        if (!confirm('¿Borrar esta publicación?')) return;
+        if (!confirm(T('confirmDeletePost'))) return;
         try {
           await api(`/api/posts/${pid}`, { method: 'DELETE' });
           feedCache = feedCache.filter(x => x.id != pid);
@@ -941,15 +885,15 @@ function renderFeed() {
       $('#pm-edit').onclick = () => {
         closeSheet();
         openSheet(`
-          <h3 style="margin-top:0">Editar publicación</h3>
+          <h3 style="margin-top:0">${T('editPostTitle')}</h3>
           <textarea id="pm-text" style="min-height:120px">${esc(post ? post.text : '')}</textarea>
-          <button class="btn" id="pm-save">Guardar cambios</button>
-          <button class="btn secondary" id="pm-cancel2">Cancelar</button>`);
+          <button class="btn" id="pm-save">${T('saveChanges')}</button>
+          <button class="btn secondary" id="pm-cancel2">${T('cancel')}</button>`);
         $('#pm-cancel2').onclick = closeSheet;
         $('#pm-save').onclick = async () => {
           try {
             await api(`/api/posts/${pid}`, { method: 'PUT', body: JSON.stringify({ text: $('#pm-text').value }) });
-            closeSheet(); toast('Publicación actualizada ✅'); loadFeed();
+            closeSheet(); toast(T('postUpdated')); loadFeed();
           } catch (err) { toast(err.message); }
         };
       };
@@ -988,12 +932,12 @@ function renderStory() {
   const s = group.stories[idx];
   const media = s.media_type === 'video'
     ? `<video src="${esc(s.media_path)}" autoplay playsinline controls></video>`
-    : `<img src="${esc(s.media_path)}" alt="historia">`;
+    : `<img src="${esc(s.media_path)}" alt="${T('storyAlt')}">`;
   const canDel = me && (group.user.id === me.id || me.role === 'admin');
   const counts = s.reactions || {};
   const countsHTML = Object.keys(counts).length
     ? Object.entries(counts).map(([e, c]) => `<button class="s-rcount">${e} ${c}</button>`).join('')
-    : '<span class="s-noreact">Sé el primero en reaccionar</span>';
+    : `<span class="s-noreact">${T('beFirstReact')}</span>`;
   $('#story-viewer').innerHTML = `
     <div class="s-top">
       ${avatarHTML(group.user)}
@@ -1004,7 +948,7 @@ function renderStory() {
     <div class="s-media">${media}</div>
     <div class="s-reactbar">
       <div class="s-counts" id="s-counts">${countsHTML}</div>
-      <button id="s-reactbtn" title="Reaccionar">${s.my_reaction || '😊'}</button>
+      <button id="s-reactbtn" title="${T('reactTitle')}">${s.my_reaction || '😊'}</button>
     </div>
     <div class="s-emojis hidden" id="s-emojis">${STORY_EMOJIS.map(e => `<button data-emoji="${e}" class="${s.my_reaction === e ? 'mine' : ''}" title="${e}">${e}</button>`).join('')}</div>
     <div class="s-reactlist hidden" id="s-reactlist"></div>
@@ -1020,7 +964,7 @@ function renderStory() {
   };
   const del = $('#s-del');
   if (del) del.onclick = async () => {
-    if (!confirm('¿Borrar esta historia definitivamente?')) return;
+    if (!confirm(T('confirmDeleteStory'))) return;
     const cb = storyState && storyState.onDelete;
     try {
       await api(`/api/stories/${s.id}`, { method: 'DELETE' });
@@ -1059,7 +1003,7 @@ function renderStory() {
       const { reactions } = await api(`/api/stories/${s.id}/reactions`);
       box.innerHTML = reactions.length
         ? reactions.map(r => `<div class="s-rrow">${avatarHTML({ avatar_path: r.avatar_path })}<span class="grow">${esc(r.name)}</span><span class="s-re">${r.emoji}</span></div>`).join('')
-        : '<p class="sub">Aún no hay reacciones.</p>';
+        : `<p class="sub">${T('noReactionsYet')}</p>`;
       box.classList.remove('hidden');
     } catch (e) { toast(e.message); }
   };
@@ -1069,19 +1013,19 @@ function renderStory() {
 function viewNew() {
   setNav('new');
   app.innerHTML = `
-    ${topbar('Nueva publicación')}
+    ${topbar(T('newPost'))}
     <div class="card">
       <form id="f-post">
-        <label>¿Qué quieres compartir con la familia?</label>
-        <textarea name="text" maxlength="2000" placeholder="Escribe algo…"></textarea>
+        <label>${T('sharePrompt')}</label>
+        <textarea name="text" maxlength="2000" placeholder="${T('writeSomething')}"></textarea>
         <div style="display:flex;gap:8px;margin:8px 0">
-          <button type="button" class="mini-btn" id="btn-cam">📷 Tomar foto</button>
-          <button type="button" class="mini-btn" id="btn-gal">🖼️ Elegir de galería</button>
+          <button type="button" class="mini-btn" id="btn-cam">${T('takePhotoBtn')}</button>
+          <button type="button" class="mini-btn" id="btn-gal">${T('galleryBtn')}</button>
         </div>
         <input type="file" id="media-input" name="media" accept="image/*" class="hidden">
         <div class="preview hidden" id="preview"></div>
         <div class="error hidden" id="err"></div>
-        <button class="btn" type="submit">Publicar 💛</button>
+        <button class="btn" type="submit">${T('publishBtn')}</button>
       </form>
     </div>`;
   const input = $('#media-input');
@@ -1092,7 +1036,7 @@ function viewNew() {
     const url = URL.createObjectURL(f);
     pv.innerHTML = f.type.startsWith('video')
       ? `<video src="${url}" controls playsinline></video>`
-      : `<img src="${url}" alt="vista previa">`;
+      : `<img src="${url}" alt="${T('previewAlt')}">`;
     pv.classList.remove('hidden');
   });
   const mediaInput = document.getElementById('media-input');
@@ -1108,15 +1052,15 @@ function viewNew() {
     e.preventDefault();
     const fd = new FormData(e.target);
     if (!fd.get('text').toString().trim() && !input.files[0]) {
-      const el = $('#err'); el.textContent = 'Escribe algo o adjunta una foto.'; el.classList.remove('hidden');
+      const el = $('#err'); el.textContent = T('writeOrPhoto'); el.classList.remove('hidden');
       return;
     }
     try {
-      toast('Publicando…');
+      toast(T('publishing'));
       await checkVideoDuration(fd);
       await compressFormImages(fd, 1600, 0.82);
       await apiForm('/api/posts', fd);
-      toast('¡Publicado! 🎉');
+      toast(T('published'));
       location.hash = '#/feed';
     } catch (err) {
       const el = $('#err'); el.textContent = err.message; el.classList.remove('hidden');
@@ -1132,7 +1076,7 @@ async function viewChatList() {
   lockZoom(false);
   stopChatPoll();
   setNav('chat');
-  app.innerHTML = `${topbar('Chat')}<div class="loading">Cargando…</div>`;
+  app.innerHTML = `${topbar(T('chatTitle'))}<div class="loading">${T('loading')}</div>`;
   try {
     const { conversations } = await api('/api/chat/conversations');
     const items = conversations.map(c => `
@@ -1140,26 +1084,26 @@ async function viewChatList() {
         <div data-go="#/chat/${c.id}" style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer">
           ${avatarHTML(c.other)}
           <div class="grow">${coloredName(c.other)}
-            <small>${c.lastMessage ? esc(c.lastMessage.text.slice(0, 60)) : 'Sin mensajes aún'}</small></div>
+            <small>${c.lastMessage ? esc(c.lastMessage.text.slice(0, 60)) : T('noMessagesYet')}</small></div>
           ${c.unread ? `<span class="badge" style="position:static">${c.unread}</span>` : ''}
         </div>
-        <button class="mini-btn" data-closechat="${c.id}" title="Cerrar conversación" style="color:#f87171">✕</button>
+        <button class="mini-btn" data-closechat="${c.id}" title="${T('closeConvoTitle')}" style="color:#f87171">✕</button>
       </div>`).join('');
-    app.innerHTML = `${topbar('Chat')}
+    app.innerHTML = `${topbar(T('chatTitle'))}
       <div style="padding:12px">
-        <button class="btn" id="btn-new-chat" style="width:100%">✏️ Nuevo mensaje</button>
+        <button class="btn" id="btn-new-chat" style="width:100%">${T('newMessage')}</button>
         <div id="chat-list" style="margin-top:8px">
-          ${items || '<p class="sub" style="text-align:center;padding:24px">Sin conversaciones.<br>Toca "Nuevo mensaje" para chatear con un familiar.</p>'}
+          ${items || `<p class="sub" style="text-align:center;padding:24px">${T('noConvos')}</p>`}
         </div>
       </div>`;
     $('#btn-new-chat').onclick = () => openNewChatSheet();
     $$('#chat-list [data-closechat]').forEach(btn => {
       btn.addEventListener('click', async e => {
         e.stopPropagation();
-        if (!confirm('¿Cerrar esta conversación? Desaparecerá de tu lista.')) return;
+        if (!confirm(T('confirmCloseConvo'))) return;
         try {
           await api(`/api/chat/conversations/${btn.dataset.closechat}`, { method: 'DELETE' });
-          toast('Conversación cerrada');
+          toast(T('convoClosed'));
           viewChatList();
         } catch (err) { toast(err.message); }
       });
@@ -1172,7 +1116,7 @@ async function viewChatList() {
         if (el && fresh.length !== conversations.length) viewChatList();
       } catch (e) {}
     }, 15000);
-  } catch (err) { app.innerHTML = `${topbar('Chat')}<p class="sub" style="padding:24px">${esc(err.message)}</p>`; }
+  } catch (err) { app.innerHTML = `${topbar(T('chatTitle'))}<p class="sub" style="padding:24px">${esc(err.message)}</p>`; }
 }
 
 async function openNewChatSheet() {
@@ -1184,17 +1128,17 @@ async function openNewChatSheet() {
     } else {
       const t = await api('/api/tree');
       list = (t.users || []).filter(m => m.id !== me.id && !m.is_placeholder)
-        .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'es'));
+        .sort((a, b) => (a.name || '').localeCompare(b.name || '', appLocale()));
     }
-    openSheet(`<div class="sheet-body"><h3 style="margin-top:0">Nuevo mensaje</h3>
-      <input id="chat-search" placeholder="🔍 Buscar familiar…" style="margin-bottom:8px">
+    openSheet(`<div class="sheet-body"><h3 style="margin-top:0">${T('newMessageTitle')}</h3>
+      <input id="chat-search" placeholder="${T('searchFamilyPh')}" style="margin-bottom:8px">
       <div id="chat-users" style="max-height:50vh;overflow:auto"></div></div>`);
     const render = q => {
       const f = list.filter(u => !q || (u.name || '').toLowerCase().includes(q.toLowerCase()));
       $('#chat-users').innerHTML = f.map(u => `
         <div class="row" data-uid="${u.id}" style="cursor:pointer">${avatarHTML(u)}
           <div class="grow"><b>${esc(u.name)}</b></div></div>`).join('')
-        || '<p class="sub">Sin resultados.</p>';
+        || `<p class="sub">${T('noResults')}</p>`;
       $$('#chat-users [data-uid]').forEach(r => r.onclick = async () => {
         try {
           const { conversation } = await api('/api/chat/conversations', {
@@ -1223,10 +1167,10 @@ async function viewChatThread(cid) {
   stopChatPoll();
   setNav('chat');
   lockZoom(true);
-  app.innerHTML = `${topbar('Chat')}<div class="loading">Cargando…</div>`;
+  app.innerHTML = `${topbar(T('chatTitle'))}<div class="loading">${T('loading')}</div>`;
   let other = null, lastId = 0, lastDate = '';
-  const fmtTime = ts => new Date(ts + 'Z').toLocaleString('es', { hour: '2-digit', minute: '2-digit' });
-  const fmtDate = ts => new Date(ts + 'Z').toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+  const fmtTime = ts => new Date(ts + 'Z').toLocaleString(appLocale(), { hour: '2-digit', minute: '2-digit' });
+  const fmtDate = ts => new Date(ts + 'Z').toLocaleDateString(appLocale(), { day: 'numeric', month: 'long', year: 'numeric' });
   const renderMsg = m => {
     const mine = m.sender_id === me.id;
     const d = fmtDate(m.created_at);
@@ -1255,19 +1199,19 @@ async function viewChatThread(cid) {
       <div class="chat-head2">
         <button class="icon-btn" data-go="#/chat">‹</button>
         <span class="ch-av">${avatarHTML(other, 'avatar sm')}<span class="online-dot"></span></span>
-        <span class="ch-info"><b>${esc(other.name)}</b><small>En línea</small></span>
+        <span class="ch-info"><b>${esc(other.name)}</b><small>${T('online')}</small></span>
         <span class="ch-actions">
-          <button class="icon-btn" title="Llamar">📞</button>
-          <button class="icon-btn" title="Video">🎥</button>
-          <button class="icon-btn" title="Más">⋮</button>
+          <button class="icon-btn" title="${T('callTitle')}">📞</button>
+          <button class="icon-btn" title="${T('videoTitle')}">🎥</button>
+          <button class="icon-btn" title="${T('moreTitle')}">⋮</button>
         </span>
       </div>
       <div id="chat-msgs" class="chat-msgs2"></div>
       <form id="f-chat" class="chat-form2">
         <div class="chat-input-wrap">
-          <input id="chat-input" placeholder="Escribe un mensaje…" autocomplete="off" maxlength="2000">
+          <input id="chat-input" placeholder="${T('typeMessagePh')}" autocomplete="off" maxlength="2000">
         </div>
-        <button class="round-btn send" type="submit" title="Enviar">➤</button>
+        <button class="round-btn send" type="submit" title="${T('sendTitle')}">➤</button>
       </form>
       </div>`;
     const box = $('#chat-msgs');
@@ -1318,7 +1262,7 @@ async function viewChatThread(cid) {
       } catch (err) { toast(err.message); inp.value = text; }
     });
   } catch (err) {
-    app.innerHTML = `${topbar('Chat')}<p class="sub" style="padding:24px">${esc(err.message)}</p>`;
+    app.innerHTML = `${topbar(T('chatTitle'))}<p class="sub" style="padding:24px">${esc(err.message)}</p>`;
   }
 }
 
@@ -1326,7 +1270,7 @@ async function viewChatThread(cid) {
 async function viewProfile(username) {
   setNav('profile');
   const uname = username || (me && me.username);
-  app.innerHTML = `${topbar('Perfil')}<div class="loading">Cargando…</div>`;
+  app.innerHTML = `${topbar(T('profileTitle'))}<div class="loading">${T('loading')}</div>`;
   try {
     const { user, postCount } = await api(`/api/users/${encodeURIComponent(uname)}`);
     const isMine = me && user.id === me.id;
@@ -1335,50 +1279,50 @@ async function viewProfile(username) {
     {
       const rows = [];
       const kv = (k, v) => { if (v) rows.push(`<p style="margin:6px 0"><strong>${k}:</strong> ${v}</p>`); };
-      if (user.nickname) kv('Apodo', `«${esc(user.nickname)}»`);
-      kv('Nacimiento', [user.birthdate ? fmtDate(user.birthdate) : '', user.birth_place ? esc(user.birth_place) : ''].filter(Boolean).join(' — '));
+      if (user.nickname) kv(T('nickname'), `«${esc(user.nickname)}»`);
+      kv(T('birth'), [user.birthdate ? fmtDate(user.birthdate) : '', user.birth_place ? esc(user.birth_place) : ''].filter(Boolean).join(' — '));
       if (user.is_deceased) {
-        kv('Fallecimiento', [user.death_date ? fmtDate(user.death_date) : '', user.death_place ? esc(user.death_place) : ''].filter(Boolean).join(' — '));
+        kv(T('death'), [user.death_date ? fmtDate(user.death_date) : '', user.death_place ? esc(user.death_place) : ''].filter(Boolean).join(' — '));
       }
-      if (user.phone) kv('Teléfono', esc(user.phone));
-      if (user.occupation) kv('Ocupación', esc(user.occupation));
-      if (user.residence) kv('Residencia', esc(user.residence));
-      fichaHTML = `<div class="card"><h3 style="margin-top:0">📋 Ficha genealógica</h3>
-        ${rows.length ? rows.join('') : '<p style="color:var(--muted)">Sin datos registrados.</p>'}
-        <button class="mini-btn" id="btn-ficha" style="margin-top:8px">Ver ficha completa</button>
+      if (user.phone) kv(T('phone'), esc(user.phone));
+      if (user.occupation) kv(T('occupation'), esc(user.occupation));
+      if (user.residence) kv(T('residence'), esc(user.residence));
+      fichaHTML = `<div class="card"><h3 style="margin-top:0">${T('geneCard')}</h3>
+        ${rows.length ? rows.join('') : `<p style="color:var(--muted)">${T('noDataRecorded')}</p>`}
+        <button class="mini-btn" id="btn-ficha" style="margin-top:8px">${T('seeFullRecord')}</button>
       </div>`;
     }
-    const exportHTML = isMine ? `<div class="card"><h3 style="margin-top:0">⬇️ Descargar datos familiares</h3>
-      <p style="color:var(--muted);font-size:.9rem;margin-top:0">El PDF trae la portada, los datos por generación y el árbol. El GEDCOM sirve para otros programas de genealogía.</p>
+    const exportHTML = isMine ? `<div class="card"><h3 style="margin-top:0">${T('downloadData')}</h3>
+      <p style="color:var(--muted);font-size:.9rem;margin-top:0">${T('downloadDesc')}</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <a class="mini-btn" href="/api/export/family.pdf" style="text-decoration:none" download>📄 PDF familiar</a>
-        <a class="mini-btn" href="/api/export/family.gedcom" style="text-decoration:none" download>🌳 GEDCOM</a>
+        <a class="mini-btn" href="/api/export/family.pdf" style="text-decoration:none" download>${T('pdfFamily')}</a>
+        <a class="mini-btn" href="/api/export/family.gedcom" style="text-decoration:none" download>${T('gedcom')}</a>
       </div></div>` : '';
     app.innerHTML = `
-      ${topbar('Perfil')}
+      ${topbar(T('profileTitle'))}
       <div class="profile-head">
         ${avatarHTML(user)}
         <h2>${esc(user.name)}${user.is_deceased ? ' ✝' : ''}</h2>
-        <p class="uname">${user.is_placeholder ? '<span class="chip">SOLO ÁRBOL</span>' : `@${esc(user.username)}`} ${user.role === 'admin' ? '<span class="chip">ADMIN</span>' : ''}</p>
+        <p class="uname">${user.is_placeholder ? `<span class="chip">${T('onlyTreeChip')}</span>` : `@${esc(user.username)}`} ${user.role === 'admin' ? '<span class="chip">ADMIN</span>' : ''}</p>
         ${user.bio ? `<p class="bio">${esc(user.bio)}</p>` : ''}
-        ${user.is_placeholder ? '' : `<p class="uname">${postCount} publicaciones</p>`}
+        ${user.is_placeholder ? '' : `<p class="uname">${T('postsCount', { n: postCount })}</p>`}
       </div>
       ${fichaHTML}
       ${exportHTML}
       <div class="menu-list">
-        ${isMine ? `<button data-go="#/settings">✏️ Editar mi perfil</button>` : ''}
-        ${me && me.role === 'admin' ? `<button data-go="#/admin">🛠 Administración</button>` : ''}
-        ${isMine ? `<button id="btn-push">🔔 Activar notificaciones</button>` : ''}
-        ${isMine ? `<button data-logout style="color:var(--danger)">🚪 Cerrar sesión</button>` : ''}
+        ${isMine ? `<button data-go="#/settings">${T('editMyProfile')}</button>` : ''}
+        ${me && me.role === 'admin' ? `<button data-go="#/admin">${T('adminBtn')}</button>` : ''}
+        ${isMine ? `<button id="btn-push">${T('pushActivate')}</button>` : ''}
+        ${isMine ? `<button data-logout style="color:var(--danger)">${T('logout')}</button>` : ''}
       </div>
       ${!user.is_placeholder ? `<div class="card" id="archive-card">
-        <h3 style="margin-top:0">📸 Archivo de historias</h3>
-        ${isMine ? `<label style="font-size:.9rem">👁 Quién puede ver mi archivo:
+        <h3 style="margin-top:0">${T('archiveTitle')}</h3>
+        ${isMine ? `<label style="font-size:.9rem">${T('whoCanSeeArchive')}
           <select id="arc-privacy" style="margin-top:6px">
-            <option value="family">Mi familia</option>
-            <option value="private">Solo yo</option>
+            <option value="family">${T('myFamily')}</option>
+            <option value="private">${T('onlyMe')}</option>
           </select></label>` : ''}
-        <div id="archive-grid" style="margin-top:10px"><p class="sub">Cargando…</p></div>
+        <div id="archive-grid" style="margin-top:10px"><p class="sub">${T('loading')}</p></div>
       </div>` : ''}`;
     $$('#app [data-go]').forEach(b => b.addEventListener('click', () => location.hash = b.dataset.go));
     const pb = $('#btn-push');
@@ -1389,9 +1333,9 @@ async function viewProfile(username) {
           const reg = await navigator.serviceWorker.ready;
           const sub = await reg.pushManager.getSubscription();
           const active = sub && Notification.permission === 'granted';
-          pb.textContent = active ? '🔕 Desactivar notificaciones' : '🔔 Activar notificaciones';
+          pb.textContent = active ? T('pushDeactivate') : T('pushActivate');
           pb.dataset.active = active ? '1' : '0';
-        } catch { pb.textContent = '🔔 Activar notificaciones'; }
+        } catch { pb.textContent = T('pushActivate'); }
       };
       updatePushBtn();
       pb.addEventListener('click', async () => {
@@ -1409,8 +1353,8 @@ async function viewProfile(username) {
               await sub.unsubscribe();
             }
             localStorage.removeItem('genloria_vapid_key');
-            toast('Notificaciones desactivadas');
-          } catch (e) { toast('Error al desactivar'); }
+            toast(T('pushDeactivated'));
+          } catch (e) { toast(T('pushDeactivateErr')); }
         } else {
           await requestPushPermission();
         }
@@ -1418,38 +1362,38 @@ async function viewProfile(username) {
       });
       // Diagnóstico push: ver mis suscripciones y enviarme una prueba
       const diagBtn = document.createElement('button');
-      diagBtn.textContent = '🧪 Probar notificación';
+      diagBtn.textContent = T('testNotif');
       diagBtn.style.marginTop = '8px';
       pb.after(diagBtn);
       const diagBox = document.createElement('div');
       diagBox.id = 'push-diag';
       diagBtn.after(diagBox);
       diagBtn.addEventListener('click', async () => {
-        diagBox.innerHTML = '<p class="sub">Probando…</p>';
+        diagBox.innerHTML = `<p class="sub">${T('testing')}</p>`;
         try {
           const st = await api('/api/users/push-status');
           const t = await api('/api/users/push-test', { method: 'POST' });
           if (!t.total) {
-            diagBox.innerHTML = '<div class="card" style="border-color:#f87171"><b>Sin suscripciones.</b><br><small>Activa las notificaciones primero con el botón de arriba.</small></div>';
+            diagBox.innerHTML = `<div class="card" style="border-color:#f87171"><b>${T('noSubs')}</b><br><small>${T('activateFirst')}</small></div>`;
             return;
           }
           diagBox.innerHTML = t.results.map(r => `
             <div class="card" style="border-color:${r.ok ? '#2e7d32' : '#f87171'};margin-top:8px">
               <b>${r.ok ? '✅' : '❌'} ${esc(r.type)}</b><br>
               <small>${r.ok
-                ? 'El servidor la envió bien. Si no la ves, el bloqueo está en tu teléfono (permiso del sistema, ahorro de batería o Chrome).'
-                : `El servidor NO pudo entregarla (código ${r.status}).<br>${esc(r.message)}`}</small>
-              ${r.ok ? '' : `<br><button class="mini-btn" data-delsub="${r.id}" style="margin-top:8px;color:#f87171">🗑️ Eliminar esta suscripción muerta</button>`}
+                ? T('sentOk')
+                : `${T('sentFail', { code: r.status })}<br>${esc(r.message)}`}</small>
+              ${r.ok ? '' : `<br><button class="mini-btn" data-delsub="${r.id}" style="margin-top:8px;color:#f87171">${T('deleteDeadSub')}</button>`}
             </div>`).join('');
           diagBox.querySelectorAll('[data-delsub]').forEach(b => b.addEventListener('click', async () => {
-            if (!confirm('¿Eliminar esta suscripción? Si ese dispositivo sigue en uso, se vuelve a crear sola al abrir la app.')) return;
+            if (!confirm(T('confirmDeleteSub'))) return;
             try {
               await api(`/api/users/push-subscriptions/${b.dataset.delsub}`, { method: 'DELETE' });
-              toast('Suscripción eliminada ✅');
+              toast(T('subDeleted'));
               diagBtn.click();
             } catch (e) { toast(e.message); }
           }));
-        } catch (e) { diagBox.innerHTML = `<p class="sub">Error: ${esc(e.message)}</p>`; }
+        } catch (e) { diagBox.innerHTML = `<p class="sub">${T('errorPrefix', { msg: esc(e.message) })}</p>`; }
       });
     }
     $('#btn-ficha').onclick = () => openPersonSheet(user.id, 'view');
@@ -1461,7 +1405,7 @@ async function viewProfile(username) {
     // Sección «Mis historias» (archivo)
     if (!user.is_placeholder) loadArchiveSection(user, isMine);
   } catch (e) {
-    app.innerHTML = `${topbar('Perfil')}<div class="empty">No se encontró ese perfil.</div>`;
+    app.innerHTML = `${topbar(T('profileTitle'))}<div class="empty">${T('profileNotFound')}</div>`;
   }
 }
 
@@ -1469,11 +1413,11 @@ async function viewProfile(username) {
 async function loadArchiveSection(user, isMine) {
   const box = $('#archive-grid');
   if (!box) return;
-  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const MESES_CORTOS = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'sept.', 'oct.', 'nov.', 'dic.'];
+  const monthLong = m => new Intl.DateTimeFormat(appLocale(), { month: 'long' }).format(new Date(2000, m, 1));
+  const monthShort = m => new Intl.DateTimeFormat(appLocale(), { month: 'short' }).format(new Date(2000, m, 1));
   const fechaCorta = (s) => {
     const d = new Date(s.created_at.replace(' ', 'T'));
-    return isNaN(d) ? '' : `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}`;
+    return isNaN(d) ? '' : `${d.getDate()} ${monthShort(d.getMonth())}`;
   };
   try {
     const url = isMine ? '/api/stories/archive' : `/api/stories/archive/${user.id}`;
@@ -1484,11 +1428,11 @@ async function loadArchiveSection(user, isMine) {
       sel.addEventListener('change', async () => {
         try {
           await api('/api/stories/archive-privacy', { method: 'PUT', body: JSON.stringify({ privacy: sel.value }) });
-          toast(sel.value === 'private' ? 'Tu archivo ahora es solo para ti 🔒' : 'Tu familia puede ver tu archivo 👪');
+          toast(sel.value === 'private' ? T('archivePrivateNow') : T('archiveFamilyNow'));
         } catch (e) { toast(e.message); }
       });
     }
-    if (!stories.length) { box.innerHTML = '<p class="sub">Aún no hay historias archivadas.</p>'; return; }
+    if (!stories.length) { box.innerHTML = `<p class="sub">${T('noArchivedStories')}</p>`; return; }
     const groups = {};
     stories.forEach(s => {
       const d = new Date(s.created_at.replace(' ', 'T'));
@@ -1498,7 +1442,7 @@ async function loadArchiveSection(user, isMine) {
     const keys = Object.keys(groups).sort().reverse();
     box.innerHTML = keys.map(k => {
       const [y, m] = k.split('-');
-      const label = k === '0000-00' ? 'Sin fecha' : `${y} · ${MESES[+m - 1]}`;
+      const label = k === '0000-00' ? T('noDate') : `${y} · ${monthLong(+m - 1)}`;
       return `<h4 class="arc-month">${label}</h4>
         <div class="arc-grid">${groups[k].map(s => `
           <div class="arc-item">
@@ -1524,48 +1468,58 @@ async function loadArchiveSection(user, isMine) {
 function viewSettings() {
   setNav('profile');
   app.innerHTML = `
-    ${topbar('Editar perfil')}
+    ${topbar(T('editProfileTitle'))}
     <div class="card">
       <form id="f-profile">
         <div style="text-align:center">${avatarHTML(me)}</div>
-        <label class="file-label" for="avatar-input">📷 Cambiar foto de perfil</label>
+        <label class="file-label" for="avatar-input">${T('changePhoto')}</label>
         <input type="file" id="avatar-input" name="avatar" accept="image/*">
-        <label>Nombre</label>
+        <label>${T('nameLbl')}</label>
         <input type="text" name="name" value="${esc(me.name)}" maxlength="60" required>
-        <label>Bio</label>
-        <textarea name="bio" maxlength="300" style="min-height:70px" placeholder="Cuéntanos algo de ti…">${esc(me.bio || '')}</textarea>
-        <label>Fecha de nacimiento</label>
+        <label>${T('bioLbl')}</label>
+        <textarea name="bio" maxlength="300" style="min-height:70px" placeholder="${T('bioPh')}">${esc(me.bio || '')}</textarea>
+        <label>${T('birthdateLbl')}</label>
         <input type="date" name="birthdate" value="${esc(me.birthdate || '')}">
-        <label>Teléfono</label>
-        <input type="tel" name="phone" value="${esc(me.phone || '')}" maxlength="30" placeholder="Opcional">
-        <label>Correo electrónico</label>
-        <input type="email" name="email" value="${esc(me.email || '')}" maxlength="120" placeholder="Para entrar y recibir correos de GENLORIA">
-        <button class="btn" type="submit">Guardar cambios</button>
+        <label>${T('phoneLbl')}</label>
+        <input type="tel" name="phone" value="${esc(me.phone || '')}" maxlength="30" placeholder="${T('optionalPh')}">
+        <label>${T('emailLbl')}</label>
+        <input type="email" name="email" value="${esc(me.email || '')}" maxlength="120" placeholder="${T('emailPh')}">
+        <button class="btn" type="submit">${T('saveChanges')}</button>
       </form>
     </div>
     <div class="card">
-      <h3 style="margin-top:0">📋 Ficha genealógica</h3>
-      <p style="color:var(--muted);font-size:.92rem;margin-top:0">Tus datos de familia: apodo, lugares, bautismo, ocupación, padres, pareja y más.</p>
-      <button class="btn secondary" id="btn-ficha-edit" style="margin-top:0">Abrir mi ficha</button>
+      <h3 style="margin-top:0">${T('langCardTitle')}</h3>
+      <p style="color:var(--muted);font-size:.92rem;margin-top:0">${T('langCardDesc')}</p>
+      <div class="menu-list" style="margin:0">
+        ${LANGS.map(l => `<button data-langset="${l.code}">${l.code === appLang ? '✓ ' : ''}${l.name}</button>`).join('')}
+      </div>
     </div>
     <div class="card">
-      <h3 style="margin-top:0">Cambiar contraseña</h3>
+      <h3 style="margin-top:0">${T('geneCard')}</h3>
+      <p style="color:var(--muted);font-size:.92rem;margin-top:0">${T('geneCardDesc')}</p>
+      <button class="btn secondary" id="btn-ficha-edit" style="margin-top:0">${T('openMyRecord')}</button>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">${T('changePassTitle')}</h3>
       <form id="f-pass">
-        <label>Contraseña actual</label>
+        <label>${T('currentPass')}</label>
         <input type="password" name="current" required>
-        <label>Nueva contraseña (mín. 8)</label>
+        <label>${T('newPassMin')}</label>
         <input type="password" name="next" required minlength="8">
-        <button class="btn secondary" type="submit">Cambiar contraseña</button>
+        <button class="btn secondary" type="submit">${T('changePassBtn')}</button>
       </form>
     </div>`;
+  $$('#app [data-langset]').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.langset !== appLang) setAppLang(b.dataset.langset);
+  }));
   $('#f-profile').addEventListener('submit', async e => {
     e.preventDefault();
     try {
-      toast('Guardando…');
+      toast(T('saving'));
       const fd = await compressFormImages(new FormData(e.target), 800, 0.85);
       const { user } = await apiForm('/api/users/me', fd, 'PUT');
       me = user;
-      toast('Perfil actualizado ✅');
+      toast(T('profileUpdated'));
       location.hash = '#/profile';
     } catch (err) { toast(err.message); }
   });
@@ -1578,7 +1532,7 @@ function viewSettings() {
         method: 'PUT',
         body: JSON.stringify({ current: fd.get('current'), next: fd.get('next') })
       });
-      toast('Contraseña cambiada ✅');
+      toast(T('passChanged'));
       e.target.reset();
     } catch (err) { toast(err.message); }
   });
@@ -1597,7 +1551,7 @@ function closeSheet() {
 }
 
 // ---------- Hoja de familiar (ficha genealógica) ----------
-const LINK_TYPE_LABEL = { biologico: 'Biológico', adoptivo: 'Adoptivo', acogida: 'Acogida' };
+function linkTypeLabels() { return { biologico: T('linkBio'), adoptivo: T('linkAdopt'), acogida: T('linkFoster') }; }
 
 function relState(t, uid) {
   const pm = t.parentMeta || {};
@@ -1640,116 +1594,116 @@ function personFormHTML(person, t, mode) {
   const partnerId = r.partner ? r.partner.id : '';
   const others = t.users.filter(u => u.id !== uid);
   return `
-  <h2 style="margin-top:0">${isCreate ? 'Agregar familiar' : 'Editar familiar'}</h2>
+  <h2 style="margin-top:0">${isCreate ? T('pfAddTitle') : T('pfEditTitle')}</h2>
   <form id="f-person">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
       <span id="ph-preview">${avatarHTML(person || {}, '')}</span>
-      <label class="file-label" for="ph-photo" style="margin:0;flex:1">📷 ${person && person.avatar_path ? 'Cambiar foto' : 'Agregar foto'}</label>
+      <label class="file-label" for="ph-photo" style="margin:0;flex:1">📷 ${person && person.avatar_path ? T('pfChangePhoto') : T('pfAddPhoto')}</label>
       <input type="file" id="ph-photo" name="photo" accept="image/*">
     </div>
-    <label>Nombre completo</label>
+    <label>${T('pfFullName')}</label>
     <input type="text" name="name" required maxlength="80" value="${pVal(person, 'name')}">
-    <label>Apodo o sobrenombre (opcional)</label>
-    <input type="text" name="nickname" maxlength="60" placeholder="Ej.: «El Flaco», «Tía Mery»…" value="${pVal(person, 'nickname')}">
-    <label>Apellido de soltera / nombre de nacimiento (opcional)</label>
-    <input type="text" name="maiden_name" maxlength="80" placeholder="Ej.: nacida como Rodríguez" value="${pVal(person, 'maiden_name')}">
-    <label>Sexo (opcional, para el registro genealógico)</label>
+    <label>${T('pfNickname')}</label>
+    <input type="text" name="nickname" maxlength="60" placeholder="${T('pfNicknamePh')}" value="${pVal(person, 'nickname')}">
+    <label>${T('pfMaiden')}</label>
+    <input type="text" name="maiden_name" maxlength="80" placeholder="${T('pfMaidenPh')}" value="${pVal(person, 'maiden_name')}">
+    <label>${T('pfSex')}</label>
     <select name="sex">
-      <option value="">— Sin indicar —</option>
-      <option value="M"${person && person.sex === 'M' ? ' selected' : ''}>Hombre</option>
-      <option value="F"${person && person.sex === 'F' ? ' selected' : ''}>Mujer</option>
-      <option value="X"${person && person.sex === 'X' ? ' selected' : ''}>Otro</option>
+      <option value="">${T('pfNotStated')}</option>
+      <option value="M"${person && person.sex === 'M' ? ' selected' : ''}>${T('sexM')}</option>
+      <option value="F"${person && person.sex === 'F' ? ' selected' : ''}>${T('sexF')}</option>
+      <option value="X"${person && person.sex === 'X' ? ' selected' : ''}>${T('sexX')}</option>
     </select>
-    <label>Fecha de nacimiento</label>
+    <label>${T('birthdateLbl')}</label>
     <input type="date" name="birthdate" value="${pDate(person, 'birthdate')}">
-    <label>Lugar de nacimiento (opcional)</label>
-    <input type="text" name="birth_place" maxlength="120" placeholder="Ciudad, provincia, país" value="${pVal(person, 'birth_place')}">
-    <label>Fecha de bautismo (opcional)</label>
+    <label>${T('pfBirthPlace')}</label>
+    <input type="text" name="birth_place" maxlength="120" placeholder="${T('placePh')}" value="${pVal(person, 'birth_place')}">
+    <label>${T('pfBaptismDate')}</label>
     <input type="date" name="baptism_date" value="${pDate(person, 'baptism_date')}">
-    <label>Lugar de bautismo (opcional)</label>
-    <input type="text" name="baptism_place" maxlength="120" placeholder="Parroquia o iglesia, ciudad" value="${pVal(person, 'baptism_place')}">
-    <p class="sub" style="text-align:left">El bautismo se registra como evento aparte: si no se conoce la fecha de nacimiento, sirve como fecha aproximada sin mezclarla con el nacimiento.</p>
+    <label>${T('pfBaptismPlace')}</label>
+    <input type="text" name="baptism_place" maxlength="120" placeholder="${T('pfBaptismPlacePh')}" value="${pVal(person, 'baptism_place')}">
+    <p class="sub" style="text-align:left">${T('pfBaptismNote')}</p>
     <label style="display:flex;align-items:center;gap:8px;font-size:1rem">
-      <input type="checkbox" name="is_deceased" value="1"${person && person.is_deceased ? ' checked' : ''} style="width:auto"> Esta persona ya falleció
+      <input type="checkbox" name="is_deceased" value="1"${person && person.is_deceased ? ' checked' : ''} style="width:auto"> ${T('pfDeceased')}
     </label>
     <div id="ph-death" style="${person && person.is_deceased ? '' : 'display:none'}">
-      <label>Fecha de fallecimiento</label>
+      <label>${T('pfDeathDate')}</label>
       <input type="date" name="death_date" value="${pDate(person, 'death_date')}">
-      <label>Lugar de fallecimiento (opcional)</label>
+      <label>${T('pfDeathPlace')}</label>
       <input type="text" name="death_place" maxlength="120" value="${pVal(person, 'death_place')}">
-      <label>Causa de fallecimiento (opcional)</label>
+      <label>${T('pfDeathCause')}</label>
       <input type="text" name="death_cause" maxlength="200" value="${pVal(person, 'death_cause')}">
-      <label>Lugar de entierro (opcional)</label>
+      <label>${T('pfBurialPlace')}</label>
       <input type="text" name="burial_place" maxlength="160" value="${pVal(person, 'burial_place')}">
     </div>
-    <label>Teléfono</label>
-    <input type="tel" name="phone" maxlength="30" placeholder="Ej.: 215-555-0134" value="${pVal(person, 'phone')}">
-    <label>Sobre esta persona (opcional)</label>
-    <textarea name="bio" maxlength="300" style="min-height:70px" placeholder="Una frase que la describa…">${pVal(person, 'bio')}</textarea>
-    <label>Ocupación (opcional)</label>
-    <input type="text" name="occupation" maxlength="120" placeholder="Ej.: maestra, carpintero, comerciante…" value="${pVal(person, 'occupation')}">
-    <label>Educación (opcional)</label>
-    <input type="text" name="education" maxlength="160" placeholder="Estudios, títulos, graduación" value="${pVal(person, 'education')}">
-    <label>Religión (opcional)</label>
+    <label>${T('phoneLbl')}</label>
+    <input type="tel" name="phone" maxlength="30" placeholder="${T('pfPhonePh')}" value="${pVal(person, 'phone')}">
+    <label>${T('pfAbout')}</label>
+    <textarea name="bio" maxlength="300" style="min-height:70px" placeholder="${T('pfAboutPh')}">${pVal(person, 'bio')}</textarea>
+    <label>${T('pfOccupation')}</label>
+    <input type="text" name="occupation" maxlength="120" placeholder="${T('pfOccupationPh')}" value="${pVal(person, 'occupation')}">
+    <label>${T('pfEducation')}</label>
+    <input type="text" name="education" maxlength="160" placeholder="${T('pfEducationPh')}" value="${pVal(person, 'education')}">
+    <label>${T('pfReligion')}</label>
     <input type="text" name="religion" maxlength="80" value="${pVal(person, 'religion')}">
-    <label>Nacionalidad / origen (opcional)</label>
+    <label>${T('pfNationality')}</label>
     <input type="text" name="nationality" maxlength="80" value="${pVal(person, 'nationality')}">
-    <label>Residencia (opcional)</label>
-    <input type="text" name="residence" maxlength="160" placeholder="Dónde vivió la mayor parte de su vida" value="${pVal(person, 'residence')}">
-    <label>Servicio militar (opcional)</label>
-    <input type="text" name="military_service" maxlength="200" placeholder="Rama, años, condecoraciones…" value="${pVal(person, 'military_service')}">
-    <label>Notas y fuentes (opcional)</label>
-    <textarea name="notes" maxlength="2000" style="min-height:70px" placeholder="De dónde salieron los datos: acta de nacimiento, censo, entrevista con…">${pVal(person, 'notes')}</textarea>
-    <p class="sub" style="text-align:left">En genealogía, cada dato debería poder respaldarse con una fuente. Lo que no se conozca se deja en blanco: nunca se inventan datos.</p>
-    <h3 style="margin:18px 0 4px">👪 Padres</h3>
-    <label>Padre</label>
-    <select name="father_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, fatherId)}</select>
-    <label>Madre</label>
-    <select name="mother_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, motherId)}</select>
-    <label>Vínculo con los padres</label>
+    <label>${T('pfResidence')}</label>
+    <input type="text" name="residence" maxlength="160" placeholder="${T('pfResidencePh')}" value="${pVal(person, 'residence')}">
+    <label>${T('pfMilitary')}</label>
+    <input type="text" name="military_service" maxlength="200" placeholder="${T('pfMilitaryPh')}" value="${pVal(person, 'military_service')}">
+    <label>${T('pfNotes')}</label>
+    <textarea name="notes" maxlength="2000" style="min-height:70px" placeholder="${T('pfNotesPh')}">${pVal(person, 'notes')}</textarea>
+    <p class="sub" style="text-align:left">${T('pfNotesNote')}</p>
+    <h3 style="margin:18px 0 4px">${T('pfParentsTitle')}</h3>
+    <label>${T('father')}</label>
+    <select name="father_id"><option value="">${T('pfNotStated')}</option>${personOpts(t.users, uid, fatherId)}</select>
+    <label>${T('mother')}</label>
+    <select name="mother_id"><option value="">${T('pfNotStated')}</option>${personOpts(t.users, uid, motherId)}</select>
+    <label>${T('pfLinkType')}</label>
     <select name="link_type">
-      <option value="biologico"${linkType === 'biologico' ? ' selected' : ''}>Biológico</option>
-      <option value="adoptivo"${linkType === 'adoptivo' ? ' selected' : ''}>Adoptivo</option>
-      <option value="acogida"${linkType === 'acogida' ? ' selected' : ''}>Acogida</option>
+      <option value="biologico"${linkType === 'biologico' ? ' selected' : ''}>${T('linkBio')}</option>
+      <option value="adoptivo"${linkType === 'adoptivo' ? ' selected' : ''}>${T('linkAdopt')}</option>
+      <option value="acogida"${linkType === 'acogida' ? ' selected' : ''}>${T('linkFoster')}</option>
     </select>
-    <p class="sub" style="text-align:left">Los vínculos adoptivos o de acogida se dibujan con línea punteada en el árbol.</p>
+    <p class="sub" style="text-align:left">${T('pfLinkNote')}</p>
     <fieldset style="border:1.5px solid var(--border);border-radius:10px;padding:12px;margin-top:12px">
-      <legend style="padding:0 8px;font-weight:700">Segundo juego de padres (opcional)</legend>
-      <p class="sub" style="text-align:left;margin-top:0">Una persona puede tener dos juegos de padres registrados a la vez —por ejemplo, los biológicos y los adoptivos—, como permiten el estándar GEDCOM y plataformas como MyHeritage.</p>
-      <label>Tipo de vínculo del segundo juego</label>
+      <legend style="padding:0 8px;font-weight:700">${T('pfSecondSet')}</legend>
+      <p class="sub" style="text-align:left;margin-top:0">${T('pfSecondSetDesc')}</p>
+      <label>${T('pfSecondLinkType')}</label>
       <select name="alt_link_type">
-        <option value="adoptivo"${((a1 || {}).link_type || 'adoptivo') === 'adoptivo' ? ' selected' : ''}>Adoptivo</option>
-        <option value="acogida"${((a1 || {}).link_type) === 'acogida' ? ' selected' : ''}>Acogida</option>
+        <option value="adoptivo"${((a1 || {}).link_type || 'adoptivo') === 'adoptivo' ? ' selected' : ''}>${T('linkAdopt')}</option>
+        <option value="acogida"${((a1 || {}).link_type) === 'acogida' ? ' selected' : ''}>${T('linkFoster')}</option>
       </select>
-      <label>Padre (segundo juego)</label>
-      <select name="alt_father_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, a1 ? a1.id : '')}</select>
-      <label>Madre (segundo juego)</label>
-      <select name="alt_mother_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, a2 ? a2.id : '')}</select>
+      <label>${T('pfFather2')}</label>
+      <select name="alt_father_id"><option value="">${T('pfNotStated')}</option>${personOpts(t.users, uid, a1 ? a1.id : '')}</select>
+      <label>${T('pfMother2')}</label>
+      <select name="alt_mother_id"><option value="">${T('pfNotStated')}</option>${personOpts(t.users, uid, a2 ? a2.id : '')}</select>
     </fieldset>
-    <h3 style="margin:18px 0 4px">💑 Pareja</h3>
-    <label>Pareja actual</label>
-    <select name="partner_id"><option value="">— Sin indicar —</option>${personOpts(t.users, uid, partnerId)}</select>
-    <label>Fecha de matrimonio (opcional)</label>
+    <h3 style="margin:18px 0 4px">${T('pfPartnerTitle')}</h3>
+    <label>${T('pfPartner')}</label>
+    <select name="partner_id"><option value="">${T('pfNotStated')}</option>${personOpts(t.users, uid, partnerId)}</select>
+    <label>${T('pfMarriageDate')}</label>
     <input type="date" name="marriage_date" value="${r.partner ? r.partner.marriage_date : ''}">
-    <label>Lugar de matrimonio (opcional)</label>
-    <input type="text" name="marriage_place" maxlength="120" placeholder="Ciudad, iglesia o registro civil" value="${esc(r.partner ? r.partner.marriage_place : '')}">
-    <label>Parejas anteriores</label>
+    <label>${T('pfMarriagePlace')}</label>
+    <input type="text" name="marriage_place" maxlength="120" placeholder="${T('pfMarriagePlacePh')}" value="${esc(r.partner ? r.partner.marriage_place : '')}">
+    <label>${T('pfFormerPartners')}</label>
     <div style="display:flex;flex-direction:column;gap:6px">
       ${others.map(u => `<label style="display:flex;align-items:center;gap:8px;font-weight:400;margin:0"><input type="checkbox" name="former_partners" value="${u.id}"${r.former.includes(u.id) ? ' checked' : ''} style="width:auto"> ${esc(u.name)}</label>`).join('')}
     </div>
-    <p class="sub" style="text-align:left">Los hijos se enlazan solos: al indicar padre o madre en la ficha de cada hijo, aparecerán aquí como hijos.</p>
+    <p class="sub" style="text-align:left">${T('pfChildrenNote')}</p>
     ${isCreate ? `
     <label style="display:flex;align-items:center;gap:8px;font-size:1rem;margin-top:16px">
-      <input type="checkbox" name="with_account" value="1" style="width:auto"> Crear cuenta de acceso para esta persona
+      <input type="checkbox" name="with_account" value="1" style="width:auto"> ${T('pfWithAccount')}
     </label>
     <div id="ph-acct" style="display:none">
-      <label>Correo electrónico (para su cuenta)</label>
-      <input type="email" name="email" maxlength="120" placeholder="Su correo para entrar a GENLORIA">
-      <p class="sub" style="text-align:left">Se generará un código para que elija su propia clave. Sin esto, el familiar solo existe en el árbol.</p>
+      <label>${T('pfAccountEmail')}</label>
+      <input type="email" name="email" maxlength="120" placeholder="${T('pfAccountEmailPh')}">
+      <p class="sub" style="text-align:left">${T('pfAccountNote')}</p>
     </div>` : ''}
     <div style="display:flex;gap:10px;margin-top:18px">
-      <button type="button" class="btn secondary" id="ph-cancel" style="margin-top:0">Cancelar</button>
-      <button type="submit" class="btn" style="margin-top:0">Guardar</button>
+      <button type="button" class="btn secondary" id="ph-cancel" style="margin-top:0">${T('cancel')}</button>
+      <button type="submit" class="btn" style="margin-top:0">${T('save')}</button>
     </div>
   </form>`;
 }
@@ -1779,7 +1733,7 @@ function wirePersonForm(person, t, mode) {
     e.preventDefault();
     const fd = new FormData(form);
     const btn = form.querySelector('[type=submit]');
-    btn.disabled = true; btn.textContent = 'Guardando…';
+    btn.disabled = true; btn.textContent = T('saving');
     try {
       const get = k => (fd.get(k) || '').toString().trim();
       const getId = k => parseInt(fd.get(k), 10) || 0;
@@ -1797,21 +1751,21 @@ function wirePersonForm(person, t, mode) {
         uid = user.id;
         await syncRelations(null, uid, rel, t, isAdmin);
         closeSheet();
-        toast('Familiar agregado ✅' + (linkErrs && linkErrs.length ? ' (' + linkErrs.join('; ') + ')' : ''));
-        if (setupCode) setTimeout(() => alert('Código de acceso para ' + user.name + ': ' + setupCode), 400);
+        toast(T('pfAddedOk') + (linkErrs && linkErrs.length ? ' (' + linkErrs.join('; ') + ')' : ''));
+        if (setupCode) setTimeout(() => alert(T('accessCodeFor', { name: user.name, code: setupCode })), 400);
       } else {
         uid = person.id;
         const url = (isAdmin && person.id !== me.id) ? `/api/users/admin/users/${uid}` : '/api/users/me';
         await apiForm(url, fd, 'PUT');
         await syncRelations(person, uid, rel, t, isAdmin);
         closeSheet();
-        toast('Ficha guardada ✅');
+        toast(T('pfSavedOk'));
       }
       if (location.hash.startsWith('#/tree')) viewTree();
       else if (location.hash.startsWith('#/family')) viewFamily();
       else location.reload();
     } catch (err) { toast(err.message); }
-    btn.disabled = false; btn.textContent = 'Guardar';
+    btn.disabled = false; btn.textContent = T('save');
   });
 }
 
@@ -1872,27 +1826,27 @@ function personViewHTML(person, t, isAdmin) {
     if (!value) return;
     infoRows.push(`<div class="pv-row"><span class="pv-ic">${icon}</span><span class="pv-lab">${label}</span><span class="pv-val">${value}</span></div>`);
   };
-  const fmtD = d => { try { return new Date(d + 'T12:00:00').toLocaleDateString('es', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch (e) { return d; } };
-  if (person.nickname) irow('🏷️', 'Apodo', `«${esc(person.nickname)}»`);
-  if (person.maiden_name) irow('🪪', 'Apellido de soltera', esc(person.maiden_name));
-  if (person.sex) irow('👤', 'Sexo', { M: 'Hombre', F: 'Mujer', X: 'Otro' }[person.sex] || esc(person.sex));
-  irow('📅', 'Nacimiento', [person.birthdate ? fmtD(person.birthdate) : '', person.birth_place ? esc(person.birth_place) : ''].filter(Boolean).join(' — '));
-  irow('💧', 'Bautismo', [person.baptism_date ? fmtD(person.baptism_date) : '', person.baptism_place ? esc(person.baptism_place) : ''].filter(Boolean).join(' — '));
+  const fmtD = d => { try { return new Date(d + 'T12:00:00').toLocaleDateString(appLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch (e) { return d; } };
+  if (person.nickname) irow('🏷️', T('nickname'), `«${esc(person.nickname)}»`);
+  if (person.maiden_name) irow('🪪', T('pvMaiden'), esc(person.maiden_name));
+  if (person.sex) irow('👤', T('pvSex'), { M: T('sexM'), F: T('sexF'), X: T('sexX') }[person.sex] || esc(person.sex));
+  irow('📅', T('birth'), [person.birthdate ? fmtD(person.birthdate) : '', person.birth_place ? esc(person.birth_place) : ''].filter(Boolean).join(' — '));
+  irow('💧', T('pvBaptism'), [person.baptism_date ? fmtD(person.baptism_date) : '', person.baptism_place ? esc(person.baptism_place) : ''].filter(Boolean).join(' — '));
   if (person.is_deceased) {
-    irow('🕊️', 'Fallecimiento', [person.death_date ? fmtD(person.death_date) : '', person.death_place ? esc(person.death_place) : ''].filter(Boolean).join(' — '));
-    irow('📝', 'Causa', person.death_cause ? esc(person.death_cause) : '');
-    irow('⚰️', 'Entierro', person.burial_place ? esc(person.burial_place) : '');
+    irow('🕊️', T('death'), [person.death_date ? fmtD(person.death_date) : '', person.death_place ? esc(person.death_place) : ''].filter(Boolean).join(' — '));
+    irow('📝', T('pvCause'), person.death_cause ? esc(person.death_cause) : '');
+    irow('⚰️', T('pvBurial'), person.burial_place ? esc(person.burial_place) : '');
   }
-  irow('📞', 'Teléfono', person.phone ? esc(person.phone) : '');
-  if (person.bio) irow('📄', 'Sobre esta persona', esc(person.bio));
-  irow('💼', 'Ocupación', person.occupation ? esc(person.occupation) : '');
-  irow('🎓', 'Educación', person.education ? esc(person.education) : '');
-  irow('⛪', 'Religión', person.religion ? esc(person.religion) : '');
-  irow('🌐', 'Nacionalidad', person.nationality ? esc(person.nationality) : '');
-  irow('🏠', 'Residencia', person.residence ? esc(person.residence) : '');
-  irow('🎖️', 'Servicio militar', person.military_service ? esc(person.military_service) : '');
-  if (person.notes) irow('📌', 'Notas y fuentes', esc(person.notes));
-  if (person.username) irow('🔑', 'Cuenta GENLORIA', 'Tiene su propia cuenta');
+  irow('📞', T('phone'), person.phone ? esc(person.phone) : '');
+  if (person.bio) irow('📄', T('pvAbout'), esc(person.bio));
+  irow('💼', T('occupation'), person.occupation ? esc(person.occupation) : '');
+  irow('🎓', T('pvEducation'), person.education ? esc(person.education) : '');
+  irow('⛪', T('pvReligion'), person.religion ? esc(person.religion) : '');
+  irow('🌐', T('pvNationality'), person.nationality ? esc(person.nationality) : '');
+  irow('🏠', T('residence'), person.residence ? esc(person.residence) : '');
+  irow('🎖️', T('pvMilitary'), person.military_service ? esc(person.military_service) : '');
+  if (person.notes) irow('📌', T('pvNotes'), esc(person.notes));
+  if (person.username) irow('🔑', T('pvAccount'), T('pvHasAccount'));
 
   // Filas de familia
   const famRows = [];
@@ -1900,56 +1854,56 @@ function personViewHTML(person, t, isAdmin) {
     if (!value) return;
     famRows.push(`<div class="pv-row"><span class="pv-ic">${icon}</span><span class="pv-lab">${label}</span><span class="pv-val">${value}</span></div>`);
   };
-  if (r.parents1.length) frow('👪', 'Padres', r.parents1.map(p => nm(p.id)).join(', '));
-  if (r.partner) frow('❤️', 'Pareja', nm(r.partner.id) + (r.partner.marriage_date ? ` (matr. ${fmtD(r.partner.marriage_date)})` : ''));
-  if (r.former.length) frow('💔', 'Parejas anteriores', r.former.map(nm).join(', '));
-  if (r.children.length) frow('👨‍👩‍👧', 'Hijos', r.children.map(nm).join(', '));
+  if (r.parents1.length) frow('👪', T('pvParents'), r.parents1.map(p => nm(p.id)).join(', '));
+  if (r.partner) frow('❤️', T('pvPartner'), nm(r.partner.id) + (r.partner.marriage_date ? ` ${T('pvMarriedShort', { date: fmtD(r.partner.marriage_date) })}` : ''));
+  if (r.former.length) frow('💔', T('pvFormer'), r.former.map(nm).join(', '));
+  if (r.children.length) frow('👨‍👩‍👧', T('pvChildren'), r.children.map(nm).join(', '));
 
   const canEdit = isAdmin || person.id === (me && me.id);
 
   return `
   <div class="sheet-body pv-sheet">
-    <button class="pv-x" id="pv-close" aria-label="Cerrar">✕</button>
+    <button class="pv-x" id="pv-close" aria-label="${T('pvClose')}">✕</button>
     <div class="pv-head">
       <div class="pv-photo-wrap">
         <img class="pv-photo" src="${avatar}" alt="${esc(person.name)}" onerror="this.src='/icons/avatar-default.svg'">
-        ${canEdit ? `<button class="pv-cam" id="pv-photo" title="Cambiar foto">📷</button>` : ''}
+        ${canEdit ? `<button class="pv-cam" id="pv-photo" title="${T('pvChangePhoto')}">📷</button>` : ''}
       </div>
       <h2 class="pv-name">${esc(person.name)}${person.is_deceased ? ' ✝' : ''}</h2>
       ${y ? `<div class="pv-year"><span class="pv-line"></span>${y}<span class="pv-line"></span></div>` : ''}
-      ${person.is_placeholder ? '<div style="margin-top:6px"><span class="chip">SOLO ÁRBOL</span></div>' : ''}
+      ${person.is_placeholder ? `<div style="margin-top:6px"><span class="chip">${T('onlyTreeChip')}</span></div>` : ''}
     </div>
     <div class="pv-actions">
-      ${person.phone ? `<button class="pv-act" id="pv-call"><span>📞</span>Llamar</button>` : ''}
-      ${person.username && person.id !== me.id ? `<button class="pv-act" id="pv-msg"><span>💬</span>Mensaje</button>` : ''}
-      <button class="pv-act" id="pv-tree"><span>🌳</span>Ver en árbol</button>
-      <button class="pv-act" id="pv-print"><span>🖨️</span>Imprimir</button>
+      ${person.phone ? `<button class="pv-act" id="pv-call"><span>📞</span>${T('pvCall')}</button>` : ''}
+      ${person.username && person.id !== me.id ? `<button class="pv-act" id="pv-msg"><span>💬</span>${T('pvMessage')}</button>` : ''}
+      <button class="pv-act" id="pv-tree"><span>🌳</span>${T('pvSeeTree')}</button>
+      <button class="pv-act" id="pv-print"><span>🖨️</span>${T('pvPrint')}</button>
     </div>
     <div class="pv-card pv-mem" id="pv-mem">
       <div class="pv-mem-head" id="pv-mem-head">
-        <span class="pv-card-ic pv-mem-ic">🖼️</span><b>Historias y recuerdos</b>
+        <span class="pv-card-ic pv-mem-ic">🖼️</span><b>${T('pvMemories')}</b>
         <span class="pv-mem-chev">›</span>
       </div>
-      <div class="pv-mem-prev" id="pv-mem-prev"><p class="sub">Cargando…</p></div>
-      <button class="pv-mem-all hidden" id="pv-mem-all">Ver todas las historias →</button>
+      <div class="pv-mem-prev" id="pv-mem-prev"><p class="sub">${T('loading')}</p></div>
+      <button class="pv-mem-all hidden" id="pv-mem-all">${T('pvSeeAllStories')}</button>
     </div>
     ${infoRows.length ? `
     <div class="pv-card">
-      <div class="pv-card-head"><span class="pv-card-ic">👤</span><b>Información personal</b>
-        ${canEdit ? `<button class="pv-edit" id="pv-edit">✏️ Editar</button>` : `<button class="pv-edit" id="pv-suggest">✏️ Proponer</button>`}
+      <div class="pv-card-head"><span class="pv-card-ic">👤</span><b>${T('pvPersonalInfo')}</b>
+        ${canEdit ? `<button class="pv-edit" id="pv-edit">${T('pvEdit')}</button>` : `<button class="pv-edit" id="pv-suggest">${T('pvSuggest')}</button>`}
       </div>
       ${infoRows.join('')}
     </div>` : ''}
     ${famRows.length ? `
     <div class="pv-card">
-      <div class="pv-card-head"><span class="pv-card-ic">👪</span><b>Familia</b>
-        ${canEdit ? `<button class="pv-edit" id="pv-edit2">✏️ Editar</button>` : ''}
+      <div class="pv-card-head"><span class="pv-card-ic">👪</span><b>${T('pvFamily')}</b>
+        ${canEdit ? `<button class="pv-edit" id="pv-edit2">${T('pvEdit')}</button>` : ''}
       </div>
       ${famRows.join('')}
-    </div>` : '<div class="pv-card"><p style="color:var(--muted);margin:0">Sin relaciones registradas.</p></div>'}
+    </div>` : `<div class="pv-card"><p style="color:var(--muted);margin:0">${T('pvNoRelations')}</p></div>`}
     <div class="pv-foot">
-      ${canEdit ? `<button class="btn" id="pv-edit3" style="margin-top:0">✏️ Editar ficha</button>` : ''}
-      <button class="btn secondary" id="pv-close2" style="margin-top:0">Cerrar</button>
+      ${canEdit ? `<button class="btn" id="pv-edit3" style="margin-top:0">${T('pvEditRecord')}</button>` : ''}
+      <button class="btn secondary" id="pv-close2" style="margin-top:0">${T('pvClose')}</button>
     </div>
   </div>`;
 }
@@ -1997,14 +1951,14 @@ async function loadMemoriesSection(person) {
   if (!card) return;
   const prev = $('#pv-mem-prev');
   const allBtn = $('#pv-mem-all');
-  const emptyMsg = '<p class="sub">Todavía no hay recuerdos compartidos.</p>';
+  const emptyMsg = `<p class="sub">${T('pvNoMemories')}</p>`;
   // Sin cuenta vinculada no hay historias que mostrar (no se atribuye nada ajeno)
   if (person.is_placeholder || !person.username) { prev.innerHTML = emptyMsg; return; }
   try {
     const { stories } = await api(`/api/stories/archive/${person.id}`);
     if (!stories.length) { prev.innerHTML = emptyMsg; return; }
     prev.innerHTML = `<div class="pv-mem-grid">${stories.slice(0, 3).map(s => `
-      <button class="pv-mem-thumb" data-mem="${s.id}" aria-label="Ver historia">
+      <button class="pv-mem-thumb" data-mem="${s.id}" aria-label="${T('viewStoryAria')}">
         <img src="${esc(s.media_path)}" alt="" loading="lazy" onerror="this.style.opacity=.3">
       </button>`).join('')}</div>`;
     allBtn.classList.remove('hidden');
@@ -2026,11 +1980,11 @@ async function loadMemoriesSection(person) {
 // Pantalla independiente con el archivo completo: cuadrícula por año y mes,
 // fecha original, pantalla completa al tocar, reacciones y privacidad respetadas.
 async function openMemoriesArchive(person) {
-  const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-  const MESES_CORTOS = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'sept.', 'oct.', 'nov.', 'dic.'];
+  const monthLong = m => new Intl.DateTimeFormat(appLocale(), { month: 'long' }).format(new Date(2000, m, 1));
+  const monthShort = m => new Intl.DateTimeFormat(appLocale(), { month: 'short' }).format(new Date(2000, m, 1));
   const fechaCorta = (s) => {
     const d = new Date(s.created_at.replace(' ', 'T'));
-    return isNaN(d) ? '' : `${d.getDate()} ${MESES_CORTOS[d.getMonth()]}`;
+    return isNaN(d) ? '' : `${d.getDate()} ${monthShort(d.getMonth())}`;
   };
   let ov = $('#mem-archive');
   if (!ov) {
@@ -2041,10 +1995,10 @@ async function openMemoriesArchive(person) {
   }
   ov.innerHTML = `
     <div class="mem-top">
-      <button class="mem-back" id="mem-back" aria-label="Volver">‹</button>
-      <div class="grow"><b>🖼️ Historias y recuerdos</b><br><small class="uname">${esc(person.name)}</small></div>
+      <button class="mem-back" id="mem-back" aria-label="${T('pvClose')}">‹</button>
+      <div class="grow"><b>🖼️ ${T('pvMemories')}</b><br><small class="uname">${esc(person.name)}</small></div>
     </div>
-    <div class="mem-body" id="mem-body"><p class="sub" style="text-align:center;padding:30px">Cargando…</p></div>`;
+    <div class="mem-body" id="mem-body"><p class="sub" style="text-align:center;padding:30px">${T('loading')}</p></div>`;
   ov.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
   const close = () => { ov.classList.add('hidden'); document.body.style.overflow = ''; };
@@ -2052,7 +2006,7 @@ async function openMemoriesArchive(person) {
   try {
     const { stories } = await api(`/api/stories/archive/${person.id}`);
     const body = $('#mem-body');
-    if (!stories.length) { body.innerHTML = '<p class="sub" style="text-align:center;padding:30px">Todavía no hay recuerdos compartidos.</p>'; return; }
+    if (!stories.length) { body.innerHTML = `<p class="sub" style="text-align:center;padding:30px">${T('pvNoMemories')}</p>`; return; }
     const groups = {};
     stories.forEach(s => {
       const d = new Date(s.created_at.replace(' ', 'T'));
@@ -2062,7 +2016,7 @@ async function openMemoriesArchive(person) {
     const keys = Object.keys(groups).sort().reverse();
     body.innerHTML = keys.map(k => {
       const [y, m] = k.split('-');
-      const label = k === '0000-00' ? 'Sin fecha' : `${y} · ${MESES[+m - 1]}`;
+      const label = k === '0000-00' ? T('noDate') : `${y} · ${monthLong(+m - 1)}`;
       return `<h4 class="arc-month">${label}</h4>
         <div class="arc-grid">${groups[k].map(s => `
           <div class="arc-item">
@@ -2081,20 +2035,20 @@ async function openMemoriesArchive(person) {
     }));
   } catch (e) {
     close();
-    toast('No se pudo abrir el archivo.');
+    toast(T('archiveOpenFail'));
   }
 }
 
 async function openPersonSheet(userId, mode) {
   const isAdmin = me && me.role === 'admin';
-  if (mode === 'create' && !isAdmin) { toast('Solo el administrador puede agregar familiares.'); return; }
+  if (mode === 'create' && !isAdmin) { toast(T('onlyAdminAdd')); return; }
   let t;
-  try { t = await api('/api/tree'); } catch (e) { toast('No se pudo cargar el árbol.'); return; }
+  try { t = await api('/api/tree'); } catch (e) { toast(T('treeLoadFail')); return; }
   let person = null;
   if (userId) {
     try { person = (await api(`/api/users/by-id/${userId}`)).user; }
-    catch (e) { toast('Persona no encontrada.'); return; }
-    if (mode === 'edit' && !isAdmin && person.id !== me.id) { toast('Sin permiso para editar.'); return; }
+    catch (e) { toast(T('personNotFound')); return; }
+    if (mode === 'edit' && !isAdmin && person.id !== me.id) { toast(T('noEditPermission')); return; }
   }
   if (mode === 'view') {
     openSheet(personViewHTML(person, t, isAdmin));
@@ -2110,11 +2064,11 @@ let treeData = null;
 
 async function viewTree() {
   setNav('tree');
-  app.innerHTML = `${topbar('Árbol familiar')}<div class="loading">Dibujando el árbol…</div>`;
+  app.innerHTML = `${topbar(T('treeTitle'))}<div class="loading">${T('treeDrawing')}</div>`;
   try {
     treeData = await api('/api/tree');
   } catch (e) {
-    app.innerHTML = `${topbar('Árbol familiar')}<div class="empty">No se pudo cargar el árbol.</div>`;
+    app.innerHTML = `${topbar(T('treeTitle'))}<div class="empty">${T('treeLoadError')}</div>`;
     return;
   }
   const { users, parents, couples } = treeData;
@@ -2123,41 +2077,41 @@ async function viewTree() {
   const unlinked = users.filter(u => !linkedIds.has(u.id));
 
   app.innerHTML = `
-    ${topbar('Árbol familiar', `<button class="icon" id="tree-suggest-top" title="Proponer corrección">✏️</button>`)}
+    ${topbar(T('treeTitle'), `<button class="icon" id="tree-suggest-top" title="${T('suggestTitle')}">✏️</button>`)}
     <div class="tree-wrap">
       <div class="tree-scroll" id="tree-scroll">
         <div class="tree-zoom">
           <button id="zoom-out">−</button>
           <button id="zoom-in">＋</button>
           <button id="zoom-reset" style="background:#22344f;color:var(--text)">⟳</button>
-          ${me.role === 'admin' ? `<button id="tree-add" style="margin-left:auto;background:transparent;border:1.5px solid var(--green);color:var(--green);font-weight:700">＋ Agregar familiar</button>` : ''}
+          ${me.role === 'admin' ? `<button id="tree-add" style="margin-left:auto;background:transparent;border:1.5px solid var(--green);color:var(--green);font-weight:700">${T('addRelative')}</button>` : ''}
         </div>
         ${window.TreeModule.renderTreeSVG(layout)}
       </div>
     </div>
     ${unlinked.length ? `
       <div class="unlinked">
-        <h3 style="margin:12px 12px 4px">Sin relaciones registradas</h3>
+        <h3 style="margin:12px 12px 4px">${T('noRelationsTitle')}</h3>
         <div class="unlinked-grid">
           ${unlinked.map(u => `<button data-uplink="${u.id}">${avatarHTML(u)} ${esc(u.name.split(' ')[0])}</button>`).join('')}
         </div>
       </div>` : ''}
     <div class="card" style="font-size:.9rem;color:var(--muted)">
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:8px">
-        <span><span style="color:var(--gold);font-weight:700">━</span> Pareja</span>
-        <span><span style="font-weight:700">┄┄</span> vínculo adoptivo o de acogida</span>
-        <span>✝ fallecido</span>
+        <span><span style="color:var(--gold);font-weight:700">━</span> ${T('legendCouple')}</span>
+        <span><span style="font-weight:700">┄┄</span> ${T('legendAdopt')}</span>
+        <span>✝ ${T('legendDeceased')}</span>
       </div>
-      Arrastra con el dedo para moverte por el árbol. Toca una persona para ver su ficha.
-      ${me.role === 'admin' ? '' : 'El administrador revisa las correcciones propuestas.'}
+      ${T('treeHint')}
+      ${me.role === 'admin' ? '' : T('treeHintAdmin')}
     </div>
     <div class="card">
-      <h3 style="margin-top:0">📖 Cómo se compone un árbol genealógico</h3>
+      <h3 style="margin-top:0">${T('treeHowTitle')}</h3>
       <div style="font-size:.92rem;color:var(--muted);line-height:1.5">
-        <p>Cada persona tiene una <b>ficha</b> con sus datos: nombre, fechas y lugares de nacimiento, bautismo y fallecimiento, ocupación, y notas con las fuentes de donde salió cada dato.</p>
-        <p>Las <b>parejas</b> se dibujan al mismo nivel unidas por una línea dorada. Los <b>hijos</b> cuelgan debajo de sus padres. Los vínculos <b>adoptivos o de acogida</b> usan línea punteada.</p>
-        <p>Las personas <b>fallecidas</b> se muestran en gris con sus años (✝ 1930–2010) como memorial.</p>
-        <p>Lo que no se conozca se deja en blanco: <b>nunca se inventan datos</b>.</p>
+        <p>${T('treeHow1')}</p>
+        <p>${T('treeHow2')}</p>
+        <p>${T('treeHow3')}</p>
+        <p>${T('treeHow4')}</p>
       </div>
     </div>`;
 
@@ -2197,50 +2151,50 @@ async function viewTree() {
 // ---------- Familia (directorio) ----------
 async function viewFamily() {
   setNav('family');
-  app.innerHTML = `${topbar('Familia')}<div class="loading">Cargando familia…</div>`;
+  app.innerHTML = `${topbar(T('familyTitle'))}<div class="loading">${T('familyLoading')}</div>`;
   let t;
   try { t = await api('/api/tree'); }
-  catch { app.innerHTML = `${topbar('Familia')}<div class="empty">No se pudo cargar.</div>`; return; }
-  const users = [...t.users].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  catch { app.innerHTML = `${topbar(T('familyTitle'))}<div class="empty">${T('familyLoadError')}</div>`; return; }
+  const users = [...t.users].sort((a, b) => a.name.localeCompare(b.name, appLocale()));
   const row = u => {
     const y = (u.birthdate || '').slice(0, 4);
     const dy = (u.death_date || '').slice(0, 4);
     const years = u.is_deceased && (y || dy) ? `✝ ${y || '…'}–${dy || '…'}` : (y || '');
     return `<button class="row" data-person="${u.id}" style="width:100%;background:var(--card);border:0;border-bottom:1px solid var(--border);text-align:left;cursor:pointer">
-      ${avatarHTML(u)}<span class="grow">${coloredName(u)}${u.is_placeholder ? ' <span class="chip">SOLO ÁRBOL</span>' : ''}<small>${years}</small></span><span style="color:var(--muted)">›</span>
+      ${avatarHTML(u)}<span class="grow">${coloredName(u)}${u.is_placeholder ? ` <span class="chip">${T('onlyTreeChip')}</span>` : ''}<small>${years}</small></span><span style="color:var(--muted)">›</span>
     </button>`;
   };
-  let familyName = 'Mi familia';
+  let familyName = T('myFamily');
   try { const { family } = await api('/api/auth/my-family'); familyName = family.name; } catch {}
   const isAdmin = me && me.role === 'admin';
   app.innerHTML = `
-    ${topbar('Familia')}
+    ${topbar(T('familyTitle'))}
     <div style="padding:16px 12px 0;text-align:center">
       <h2 style="margin:0;display:inline-block">${esc(familyName)}</h2>
-      ${isAdmin ? `<button class="mini-btn" id="btn-famname" style="margin-left:8px" title="Cambiar nombre">✏️</button>` : ''}
+      ${isAdmin ? `<button class="mini-btn" id="btn-famname" style="margin-left:8px" title="${T('changeNameTitle')}">✏️</button>` : ''}
     </div>
-    <div style="padding:12px 12px 0"><button class="btn" id="btn-invite" style="width:100%">✉️ Invitar a un familiar</button></div>
-    <div style="padding:12px 12px 0"><input type="search" id="fam-q" placeholder="🔍 Buscar familiar…" style="margin:0"></div>
+    <div style="padding:12px 12px 0"><button class="btn" id="btn-invite" style="width:100%">${T('inviteBtn')}</button></div>
+    <div style="padding:12px 12px 0"><input type="search" id="fam-q" placeholder="${T('searchFamilyDirPh')}" style="margin:0"></div>
     <div class="card" style="padding:0;overflow:hidden" id="fam-list">
       ${users.map(row).join('')}
     </div>
-    <p style="text-align:center;color:var(--muted);font-size:.85rem">${users.length} persona(s) en la familia</p>`;
+    <p style="text-align:center;color:var(--muted);font-size:.85rem">${T('peopleInFamily', { n: users.length })}</p>`;
   const bfn = $('#btn-famname');
   if (bfn) bfn.onclick = async () => {
-    const nuevo = prompt('Nombre de la familia:', familyName);
+    const nuevo = prompt(T('familyNamePrompt'), familyName);
     if (!nuevo || !nuevo.trim() || nuevo.trim() === familyName) return;
     try {
       const r = await api('/api/auth/my-family', { method: 'PUT', body: JSON.stringify({ name: nuevo.trim() }) });
-      toast('Nombre actualizado ✅');
+      toast(T('nameUpdated'));
       location.reload();
     } catch (e) { toast(e.message); }
   };
   $('#btn-invite').onclick = async () => {
     try {
       const { family } = await api('/api/auth/my-family');
-      const text = `Únete a mi familia "${family.name}" en GENLORIA con el código: ${family.invite_code} — https://genloria.com/#/register`;
+      const text = T('inviteText', { name: family.name, code: family.invite_code });
       if (navigator.share) { try { await navigator.share({ text }); } catch {} }
-      else { try { await navigator.clipboard.writeText(text); toast('Invitación copiada 📋'); } catch {} }
+      else { try { await navigator.clipboard.writeText(text); toast(T('inviteCopied')); } catch {} }
     } catch (err) { toast(err.message); }
   };
   const q = $('#fam-q'), list = $('#fam-list');
@@ -2248,7 +2202,7 @@ async function viewFamily() {
   q.addEventListener('input', () => {
     const s = q.value.trim().toLowerCase();
     list.innerHTML = users.filter(u => u.name.toLowerCase().includes(s)).map(row).join('') ||
-      '<div class="empty">Sin resultados.</div>';
+      `<div class="empty">${T('noResults')}</div>`;
   });
   list.addEventListener('click', e => {
     const b = e.target.closest('[data-person]');
@@ -2268,25 +2222,25 @@ async function viewSuggest() {
   if (!treeData) { try { treeData = await api('/api/tree'); } catch { treeData = { users: [] }; } }
   const users = treeData.users;
   app.innerHTML = `
-    ${topbar('Proponer corrección')}
+    ${topbar(T('suggestTitle'))}
     <div class="card">
       <p style="color:var(--muted);font-size:.92rem;margin-top:0">
-        El administrador revisará tu propuesta antes de cambiar el árbol.</p>
+        ${T('suggestDesc')}</p>
       <form id="f-suggest">
-        <label>Tipo de corrección</label>
+        <label>${T('suggestKind')}</label>
         <select name="kind" id="sg-kind" style="width:100%;padding:12px;border-radius:10px;border:1.5px solid var(--border);font-size:1rem">
-          <option value="add_parent">➕ Es su padre/madre (agregar)</option>
-          <option value="remove_parent">➖ No es su padre/madre (quitar)</option>
-          <option value="add_couple">💛 Son pareja (agregar)</option>
-          <option value="remove_couple">💔 Ya no son pareja (quitar)</option>
+          <option value="add_parent">${T('sgAddParent')}</option>
+          <option value="remove_parent">${T('sgRemoveParent')}</option>
+          <option value="add_couple">${T('sgAddCouple')}</option>
+          <option value="remove_couple">${T('sgRemoveCouple')}</option>
         </select>
-        <label>Persona A</label>
+        <label>${T('personA')}</label>
         <select name="userAId" id="sg-a" style="width:100%;padding:12px;border-radius:10px;border:1.5px solid var(--border);font-size:1rem">${userOptions(users, me.id)}</select>
-        <label>Persona B</label>
+        <label>${T('personB')}</label>
         <select name="userBId" id="sg-b" style="width:100%;padding:12px;border-radius:10px;border:1.5px solid var(--border);font-size:1rem">${userOptions(users, preset)}</select>
-        <label>Nota (opcional)</label>
-        <textarea name="note" maxlength="500" style="min-height:70px" placeholder="Ej: Es mi tío por parte de mamá…"></textarea>
-        <button class="btn" type="submit">Enviar propuesta</button>
+        <label>${T('noteOptional')}</label>
+        <textarea name="note" maxlength="500" style="min-height:70px" placeholder="${T('notePh')}"></textarea>
+        <button class="btn" type="submit">${T('sendProposal')}</button>
       </form>
     </div>`;
   $('#f-suggest').addEventListener('submit', async e => {
@@ -2302,7 +2256,7 @@ async function viewSuggest() {
           note: fd.get('note')
         })
       });
-      toast('Propuesta enviada ✅');
+      toast(T('proposalSent'));
       location.hash = '#/tree';
     } catch (err) { toast(err.message); }
   });
